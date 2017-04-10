@@ -1,0 +1,73 @@
+buildscript {
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        maven {
+            name = "sonatype"
+            url = "https://oss.sonatype.org/content/repositories/snapshots/"
+        }
+        maven {
+            name = "forge"
+            url = "http://files.minecraftforge.net/maven"
+        }
+        maven {
+            name = 'sponge'
+            url = 'http://repo.spongepowered.org/maven'
+        }
+        jcenter()
+    }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:2.2-SNAPSHOT'
+        //classpath 'org.spongepowered:mixingradle:0.4-SNAPSHOT'
+    }
+}
+
+apply plugin: 'java'
+
+version = "0.1"
+group = "pokechu22"
+archivesBaseName = "mcrdp"
+
+apply plugin: 'net.minecraftforge.gradle.liteloader'
+//apply plugin: 'org.spongepowered.mixin'
+
+minecraft {
+    version = "1.11.2"
+    mappings = "snapshot_20170326"
+    runDir = "run"
+}
+
+/*sourceSets {
+    main {
+        java {
+            srcDir "src/main/java"
+            srcDir project(':1.11.2').file("src/main/java")
+            srcDir project(':share').file("src/main/java")
+        }
+        resources {
+            srcDir "src/main/resources"
+            srcDir project(':share').file("src/main/resources")
+        }
+        // Refmap declaration must match the refmap name specified in the json config
+        refMap = "mixins.mcrdp.refmap.json"
+    }
+}
+
+mixin {
+    defaultObfuscationEnv notch
+}*/
+
+litemod {
+    json {
+        name = "mcrdp"
+        displayName = "Minecraft RDP"
+        author = "pokechu22; properJavaRDP contributors"
+        mcversion = "1.11.2"
+        //mixinConfigs += "mixins.mcrdp.json"
+        version = project.version
+    }
+}
+
+jar {
+    from litemod.outputs
+}

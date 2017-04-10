@@ -1,0 +1,8 @@
+/bin/
+/.gradle/
+/.settings/
+/build/
+/.classpath
+/.project
+/build.number
+/mcrdp_Client.launch

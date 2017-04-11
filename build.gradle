@@ -24,6 +24,15 @@ buildscript {
 
 apply plugin: 'java'
 
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    compile 'unoficial.net.propero:properjavardp:1.1-tweaked-0.1' // github.com/pokechu22/properjavardp
+}
+
 version = "0.1"
 group = "pokechu22"
 archivesBaseName = "mcrdp"

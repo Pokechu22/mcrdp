@@ -380,7 +380,7 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 	private void handleNewTE(BlockPos pos, NBTTagCompound tag) {
 		String[] lines = new String[4];
 		for (int i = 0; i < 4; i++) {
-			lines[i] = tag.getString("Text" + (i + 1));
+			lines[i] = ITextComponent.Serializer.fromJsonLenient(tag.getString("Text" + (i + 1))).getUnformattedText();
 		}
 		if (!lines[0].contains("mcrdp")) {
 			// Nothing at all that can be wrong.
@@ -438,7 +438,7 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 				glPushMatrix();
 				glTranslated(-x, -y, -z);
 				glTranslatef(info.pos.getX(), info.pos.getY(), info.pos.getZ());
-				drawImage(8, 6); // TODO: auto-width
+				drawImage(info.width, info.height);
 				glPopMatrix();
 			} catch (RuntimeException ex) {
 				ex.printStackTrace();

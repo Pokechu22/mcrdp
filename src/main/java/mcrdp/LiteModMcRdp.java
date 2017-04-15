@@ -12,6 +12,7 @@ import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -24,7 +25,9 @@ import org.lwjgl.BufferUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.particle.Particle;
 import net.minecraft.client.renderer.RenderGlobal;
+import net.minecraft.init.Blocks;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.INetHandler;
 import net.minecraft.network.Packet;
@@ -359,14 +362,14 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 			SPacketChunkData cpacket = (SPacketChunkData) packet;
 			for (NBTTagCompound tag : cpacket.getTileEntityTags()) {
 				if (tag.getString("id").toLowerCase().contains("sign")) {
-					handleTE(new BlockPos(tag.getInteger("x"), tag.getInteger("y"),
+					handleNewTE(new BlockPos(tag.getInteger("x"), tag.getInteger("y"),
 							tag.getInteger("z")), tag);
 				}
 			}
 		} else if (packet instanceof SPacketUpdateTileEntity) {
 			SPacketUpdateTileEntity cpacket = (SPacketUpdateTileEntity) packet;
 			if (cpacket.getTileEntityType() == 9) {
-				handleTE(cpacket.getPos(), cpacket.getNbtCompound());
+				handleNewTE(cpacket.getPos(), cpacket.getNbtCompound());
 			}
 		}
 		return true;
@@ -374,7 +377,7 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 
 	private Map<BlockPos, RDPInfo> infos = new HashMap<BlockPos, RDPInfo>();
 
-	private void handleTE(BlockPos pos, NBTTagCompound tag) {
+	private void handleNewTE(BlockPos pos, NBTTagCompound tag) {
 		String[] lines = new String[4];
 		for (int i = 0; i < 4; i++) {
 			lines[i] = tag.getString("Text" + (i + 1));
@@ -406,16 +409,36 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 	@Override
 	public void onSetupCameraTransform(float partialTicks, int pass,
 			long timeSlice) {
-		if (this.canvas == null) {
+		Minecraft minecraft = Minecraft.getMinecraft();
+
+		if (this.canvas == null || minecraft.world == null) {
+			if (!this.infos.isEmpty()) {
+				Minecraft.getMinecraft().ingameGUI.getChatGUI().printChatMessage(new TextComponentString("Freeing " + this.infos.size() + " entries"));
+				this.infos.clear();
+			}
 			return;
 		}
-		for (RDPInfo info : infos.values()) {
+		bindImage(canvas);
+
+		EntityPlayerSP player = Minecraft.getMinecraft().player;
+		double x = player.lastTickPosX + (player.posX - player.lastTickPosX) * (double)partialTicks;
+		double y = player.lastTickPosY + (player.posY - player.lastTickPosY) * (double)partialTicks;
+		double z = player.lastTickPosZ + (player.posZ - player.lastTickPosZ) * (double)partialTicks;
+
+		for (Iterator<RDPInfo> itr = this.infos.values().iterator(); itr.hasNext();) {
+			RDPInfo info = itr.next();
+			// Check if unloaded, and delete as needed
+			if (minecraft.world.getBlockState(info.pos).getBlock() != Blocks.WALL_SIGN) {
+				Minecraft.getMinecraft().ingameGUI.getChatGUI().printChatMessage(new TextComponentString("Rem"));
+				itr.remove();
+				continue;
+			}
+			// Render as such
 			try {
 				glPushMatrix();
-				EntityPlayerSP player = Minecraft.getMinecraft().player;
-				glTranslated(-player.posX, -player.posY, -player.posZ);
+				glTranslated(-x, -y, -z);
 				glTranslatef(info.pos.getX(), info.pos.getY(), info.pos.getZ());
-				drawImage(canvas, 8, 6);
+				drawImage(8, 6); // TODO: auto-width
 				glPopMatrix();
 			} catch (RuntimeException ex) {
 				ex.printStackTrace();
@@ -424,13 +447,7 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		}
 	}
 
-	/**
-	 * Draws the given image at the current location, using the given width and heigt values.
-	 * @param img The image to draw
-	 * @param width The width in blocks (NOT the width of the image)
-	 * @param height The height in blocks (NOT the height of the image)
-	 */
-	private void drawImage(RdesktopCanvas image, int width, int height) {
+	private void bindImage(RdesktopCanvas image) {
 		// http://www.java-gaming.org/index.php?topic=25516.0
 		int[] pixels = image.getImage(0, 0, image.getWidth(), image.getHeight());
 
@@ -458,21 +475,29 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		glBindTexture(GL_TEXTURE_2D, textureID); //Bind texture ID
 		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, image.getWidth(), image.getHeight(), 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+	}
 
+	/**
+	 * Draws the given image at the current location, using the given width and height values.
+	 * @param width The width in blocks (NOT the width of the image)
+	 * @param height The height in blocks (NOT the height of the image)
+	 */
+	private void drawImage(int width, int height) {
 		glBegin(GL_QUADS);
 		{
 			// This needs to be flipped vertically for some reason...
+			final float Z_PUSH = 2/16f; // To avoid z-fighting: slightly larger than a sign
 			glTexCoord2f(0, 1);
-			glVertex3f(0, 0, 0);
+			glVertex3f(0, 0, Z_PUSH);
 
 			glTexCoord2f(1, 1);
-			glVertex3f(width, 0, 0);
+			glVertex3f(width, 0, Z_PUSH);
 
 			glTexCoord2f(1, 0);
-			glVertex3f(width, height, 0);
+			glVertex3f(width, height, Z_PUSH);
 
 			glTexCoord2f(0, 0);
-			glVertex3f(0, height, 0);
+			glVertex3f(0, height, Z_PUSH);
 		}
 		glEnd();
 	}

@@ -22,6 +22,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.BufferUtils;
 
+import net.minecraft.block.BlockWallSign;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.gui.GuiScreen;
@@ -33,6 +35,7 @@ import net.minecraft.network.INetHandler;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.SPacketChunkData;
 import net.minecraft.network.play.server.SPacketUpdateTileEntity;
+import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
@@ -428,16 +431,40 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		for (Iterator<RDPInfo> itr = this.infos.values().iterator(); itr.hasNext();) {
 			RDPInfo info = itr.next();
 			// Check if unloaded, and delete as needed
-			if (minecraft.world.getBlockState(info.pos).getBlock() != Blocks.WALL_SIGN) {
+			IBlockState state = minecraft.world.getBlockState(info.pos);
+			if (state.getBlock() != Blocks.WALL_SIGN) {
 				Minecraft.getMinecraft().ingameGUI.getChatGUI().printChatMessage(new TextComponentString("Rem"));
 				itr.remove();
 				continue;
 			}
+
 			// Render as such
 			try {
 				glPushMatrix();
 				glTranslated(-x, -y, -z);
 				glTranslatef(info.pos.getX(), info.pos.getY(), info.pos.getZ());
+				switch (state.getValue(BlockWallSign.FACING)) {
+				case NORTH:
+					glRotatef(180, 0, 1, 0);
+					glTranslatef(-1, 0, -1);
+					break;
+				case EAST:
+					glRotatef(90, 0, 1, 0);
+					glTranslatef(-1, 0, 0);
+					break;
+				case SOUTH:
+					// Noop
+					glRotatef(0, 0, 1, 0);
+					glTranslatef(0, 0, 0);
+					break;
+				case WEST:
+					glRotatef(270, 0, 1, 0);
+					glTranslatef(0, 0, -1);
+					break;
+				default:
+					// Unexpected values (up, down)
+					return;
+				}
 				drawImage(info.width, info.height);
 				glPopMatrix();
 			} catch (RuntimeException ex) {

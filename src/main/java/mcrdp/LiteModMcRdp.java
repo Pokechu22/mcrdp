@@ -1,12 +1,15 @@
 package mcrdp;
 
 import static net.propero.rdp.Rdesktop.*;  // Unfortunate use of global variables
+import static org.lwjgl.opengl.GL11.*;
 
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -16,10 +19,12 @@ import javax.annotation.Nullable;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.lwjgl.BufferUtils;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.INetHandler;
 import net.minecraft.network.Packet;
@@ -35,6 +40,7 @@ import net.propero.rdp.Constants;
 import net.propero.rdp.KeyCode_FileBased_Localised;
 import net.propero.rdp.Options;
 import net.propero.rdp.Rdesktop;
+import net.propero.rdp.RdesktopCanvas;
 import net.propero.rdp.RdesktopException;
 import net.propero.rdp.RdesktopFrame;
 import net.propero.rdp.RdesktopFrame_Localised;
@@ -50,16 +56,22 @@ import com.mumfrey.liteloader.LiteMod;
 import com.mumfrey.liteloader.PacketHandler;
 import com.mumfrey.liteloader.PlayerClickListener;
 import com.mumfrey.liteloader.PlayerInteractionListener.MouseButton;
+import com.mumfrey.liteloader.PreRenderListener;
+import com.mumfrey.liteloader.gl.GL;
 import com.mumfrey.liteloader.modconfig.ExposableOptions;
 import com.mumfrey.liteloader.RenderListener;
 
-public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler, RenderListener {
+public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler, PreRenderListener {
 	// TODO: These things shouldn't be constant
 	private String server = "pi";
 	private String username = "pi";
 	private int width = 800, height = 600;
 
+	private Thread rdpThread;
+
 	private Logger logger = LogManager.getLogger();
+
+	private int textureID = -1;
 
 	@Override
 	public String getName() {
@@ -74,21 +86,26 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 	@Override
 	public void init(File configPath) {
 		initRDP();
+		textureID = glGenTextures();
 	}
+
+	private RdesktopCanvas canvas;
 
 	/** from {@link Rdesktop#main(String[])} */
 	private void initRDP() {
+		Runnable rdpRunnable = new Runnable() { @Override public void run() {
+
 		keep_running = true;
 		loggedon = false;
 		readytosend = false;
 		showTools = false;
-		mapFile = "en-gb";
+		mapFile = "en-us";
 		keyMapLocation = "";
 		toolFrame = null;
 
-		Options.username = username;
-		Options.width = width;
-		Options.height = height;
+		Options.username = LiteModMcRdp.this.username;
+		Options.width = LiteModMcRdp.this.width;
+		Options.height = LiteModMcRdp.this.height;
 
 		// ... skip option parsing ...
 
@@ -176,6 +193,7 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 			RdpLayer.registerDrawingSurface(window);
 			logger.debug("Registering comms layer...");
 			window.registerCommLayer(RdpLayer);
+			LiteModMcRdp.this.canvas = window.getCanvas();
 			loggedon = false;
 			readytosend = false;
 			logger
@@ -316,6 +334,9 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 			}
 		}
 		Rdesktop.exit(0, RdpLayer, window, true);
+		}};
+		rdpThread = new Thread(rdpRunnable, "RDP thread");
+		rdpThread.start();
 	}
 
 	@Override
@@ -364,6 +385,7 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		}
 		try {
 			infos.put(pos, new RDPInfo(pos, lines));
+			Minecraft.getMinecraft().ingameGUI.getChatGUI().printChatMessage(new TextComponentString("Test"));
 		} catch (InvalidRDPException ex) {
 			ITextComponent component = new TextComponentString(ex.getMessage());
 			component.getStyle().setColor(TextFormatting.RED);
@@ -382,19 +404,94 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 	}
 
 	@Override
-	public void onRender() {
+	public void onSetupCameraTransform(float partialTicks, int pass,
+			long timeSlice) {
+		if (this.canvas == null) {
+			return;
+		}
 		for (RDPInfo info : infos.values()) {
-			
+			try {
+				glPushMatrix();
+				EntityPlayerSP player = Minecraft.getMinecraft().player;
+				glTranslated(-player.posX, -player.posY, -player.posZ);
+				glTranslatef(info.pos.getX(), info.pos.getY(), info.pos.getZ());
+				drawImage(canvas, 8, 6);
+				glPopMatrix();
+			} catch (RuntimeException ex) {
+				ex.printStackTrace();
+				throw ex;
+			}
 		}
 	}
 
-	@Override
-	public void onRenderGui(GuiScreen currentScreen) {
+	/**
+	 * Draws the given image at the current location, using the given width and heigt values.
+	 * @param img The image to draw
+	 * @param width The width in blocks (NOT the width of the image)
+	 * @param height The height in blocks (NOT the height of the image)
+	 */
+	private void drawImage(RdesktopCanvas image, int width, int height) {
+		// http://www.java-gaming.org/index.php?topic=25516.0
+		int[] pixels = image.getImage(0, 0, image.getWidth(), image.getHeight());
 
+		ByteBuffer buffer = BufferUtils.createByteBuffer(image.getWidth() * image.getHeight() * 4); //4 for RGBA, 3 for RGB
+
+		for(int y = 0; y < image.getHeight(); y++){
+			for(int x = 0; x < image.getWidth(); x++){
+				int pixel = pixels[y * image.getWidth() + x];
+				buffer.put((byte) ((pixel >> 16) & 0xFF));     // Red component
+				buffer.put((byte) ((pixel >> 8) & 0xFF));      // Green component
+				buffer.put((byte) (pixel & 0xFF));               // Blue component
+				buffer.put((byte) ((pixel >> 24) & 0xFF));    // Alpha component. Only for RGBA
+			}
+		}
+
+		buffer.flip(); //FOR THE LOVE OF GOD DO NOT FORGET THIS
+
+		// You now have a ByteBuffer filled with the color data of each pixel.
+		// Now just create a texture ID and bind it. Then you can load it using 
+		// whatever OpenGL method you want, for example:
+
+		// Do the drawing
+		glEnable(GL_TEXTURE_2D);
+
+		glBindTexture(GL_TEXTURE_2D, textureID); //Bind texture ID
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, image.getWidth(), image.getHeight(), 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+
+		glBegin(GL_QUADS);
+		{
+			// This needs to be flipped vertically for some reason...
+			glTexCoord2f(0, 1);
+			glVertex3f(0, 0, 0);
+
+			glTexCoord2f(1, 1);
+			glVertex3f(width, 0, 0);
+
+			glTexCoord2f(1, 0);
+			glVertex3f(width, height, 0);
+
+			glTexCoord2f(0, 0);
+			glVertex3f(0, height, 0);
+		}
+		glEnd();
 	}
 
 	@Override
-	public void onSetupCameraTransform() {
+	public void onRenderWorld(float partialTicks) {
+	}
+
+	@Override
+	public void onRenderSky(float partialTicks, int pass) {
+	}
+
+	@Override
+	public void onRenderClouds(float partialTicks, int pass,
+			RenderGlobal renderGlobal) {
+	}
+
+	@Override
+	public void onRenderTerrain(float partialTicks, int pass) {
 
 	}
 }

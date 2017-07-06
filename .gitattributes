@@ -1,0 +1,7 @@
+* text=auto
+
+*.java text eol=lf
+*.gradle text eol=lf
+
+*.png binary
+*.jar binary

@@ -155,8 +155,6 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		}
 
 		Rdp5 RdpLayer = null;
-		RdesktopFrame window = new RdesktopFrame(options);
-		window.setClip(clipChannel);
 
 		// Configure a keyboard layout
 		KeyCode_FileBased keyMap = null;
@@ -178,14 +176,11 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 			options.keylayout = keyMap.getMapCode();
 		} catch (Exception kmEx) {
 			LOGGER.warn("Unexpected keymap exception: ", kmEx);
-			String[] msg = { (kmEx.getClass() + ": " + kmEx.getMessage()) };
-			window.showErrorDialog(msg);
 			Rdesktop.exit(0, null, null, true);
 		}
 
 		LOGGER.debug("Registering keyboard...");
 		if (keyMap != null) {
-			window.registerKeyboard(keyMap);
 		}
 
 		LOGGER.debug("keep_running = " + keep_running);
@@ -194,9 +189,8 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 			RdpLayer = new Rdp5(options, channels);
 			clipChannel.setSecure(RdpLayer.SecureLayer);  // XXX this shouldn't be needed
 			LOGGER.debug("Registering drawing surface...");
-			RdpLayer.registerDrawingSurface(window);
+			RdpLayer.registerDrawingSurface(LiteModMcRdp.this);
 			LOGGER.debug("Registering comms layer...");
-			window.registerCommLayer(RdpLayer);
 			loggedon = false;
 			readytosend = false;
 			LOGGER
@@ -240,7 +234,7 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 
 					if (info.wasCleanDisconnect()) {
 						/* clean disconnect */
-						Rdesktop.exit(0, RdpLayer, window, true);
+						Rdesktop.exit(0, RdpLayer, null, true);
 						// return 0;
 					} else {
 						if (info.getReason() == Reason.RPC_INITIATED_DISCONNECT
@@ -249,15 +243,12 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 							 * not so clean disconnect, but nothing to worry
 							 * about
 							 */
-							Rdesktop.exit(0, RdpLayer, window, true);
+							Rdesktop.exit(0, RdpLayer, null, true);
 							// return 0;
 						} else {
 							String reason = info.toString();
-							String msg[] = { "Connection terminated",
-									reason };
-							window.showErrorDialog(msg);
 							LOGGER.warn("Connection terminated: " + reason);
-							Rdesktop.exit(0, RdpLayer, window, true);
+							Rdesktop.exit(0, RdpLayer, null, true);
 						}
 
 					}
@@ -268,10 +259,8 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 						// problem, retry?
 						String msg1 = "The terminal server disconnected before licence negotiation completed.";
 						String msg2 = "Possible cause: terminal server could not issue a licence.";
-						String[] msg = { msg1, msg2 };
 						LOGGER.warn(msg1);
 						LOGGER.warn(msg2);
-						window.showErrorDialog(msg);
 					}
 				} // closing bracket to if(running)
 
@@ -284,9 +273,7 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 
 			} catch (ConnectionException e) {
 				LOGGER.warn("Connection exception", e);
-				String msg[] = { "Connection Exception", e.getMessage() };
-				window.showErrorDialog(msg);
-				Rdesktop.exit(0, RdpLayer, window, true);
+				Rdesktop.exit(0, RdpLayer, null, true);
 			} catch (UnknownHostException e) {
 				LOGGER.warn("Unknown host exception", e);
 				error(e, RdpLayer);
@@ -296,7 +283,6 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 					LOGGER.fatal(s.getClass().getName() + " "
 							+ s.getMessage());
 					error(s, RdpLayer);
-					Rdesktop.exit(0, RdpLayer, window, true);
 				}
 			} catch (RdesktopException e) {
 				String msg1 = e.getClass().getName();
@@ -306,35 +292,23 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 				if (!readytosend) {
 					// maybe the licence server was having a comms
 					// problem, retry?
-					String msg[] = {
-							"The terminal server reset connection before licence negotiation completed.",
-							"Possible cause: terminal server could not connect to licence server.",
-					"Retry?" };
-					boolean retry = window.showYesNoErrorDialog(msg);
-					if (!retry) {
-						LOGGER.info("Selected not to retry.");
-						Rdesktop.exit(0, RdpLayer, window, true);
-					} else {
-						if (RdpLayer != null && RdpLayer.isConnected()) {
-							LOGGER.info("Disconnecting ...");
-							RdpLayer.disconnect();
-							LOGGER.info("Disconnected");
-						}
-						LOGGER.info("Retrying connection...");
-						keep_running = true; // retry
-						continue;
+					if (RdpLayer != null && RdpLayer.isConnected()) {
+						LOGGER.info("Disconnecting ...");
+						RdpLayer.disconnect();
+						LOGGER.info("Disconnected");
 					}
+					LOGGER.info("Retrying connection...");
+					keep_running = true; // retry
+					continue;
 				} else {
-					String msg[] = { e.getMessage() };
-					window.showErrorDialog(msg);
-					Rdesktop.exit(0, RdpLayer, window, true);
+					Rdesktop.exit(0, RdpLayer, null, true);
 				}
 			} catch (Exception e) {
 				LOGGER.warn("Other unhandled exception: " + e.getClass().getName() + " " + e.getMessage(), e);
 				error(e, RdpLayer);
 			}
 		}
-		Rdesktop.exit(0, RdpLayer, window, true);
+		Rdesktop.exit(0, RdpLayer, null, true);
 		}};
 		rdpThread = new Thread(rdpRunnable, "RDP thread");
 		rdpThread.start();

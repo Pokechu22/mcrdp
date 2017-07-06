@@ -1,9 +1,10 @@
 package mcrdp;
 
-import static net.propero.rdp.Rdesktop.*;  // Unfortunate use of global variables
+import static net.propero.rdp.Rdesktop.*;
+// Unfortunate use of global variables
 import static org.lwjgl.opengl.GL11.*;
 
-import java.awt.image.BufferedImage;
+import java.awt.Cursor;
 import java.io.File;
 import java.io.InputStream;
 import java.net.InetAddress;
@@ -18,16 +19,10 @@ import java.util.Map;
 
 import javax.annotation.Nullable;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.lwjgl.BufferUtils;
-
 import net.minecraft.block.BlockWallSign;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.particle.Particle;
 import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.init.Blocks;
 import net.minecraft.nbt.NBTTagCompound;
@@ -35,47 +30,45 @@ import net.minecraft.network.INetHandler;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.SPacketChunkData;
 import net.minecraft.network.play.server.SPacketUpdateTileEntity;
-import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextFormatting;
-import net.propero.rdp.Common;
 import net.propero.rdp.ConnectionException;
-import net.propero.rdp.Constants;
-import net.propero.rdp.KeyCode_FileBased_Localised;
+import net.propero.rdp.DisconnectInfo;
+import net.propero.rdp.DisconnectInfo.Reason;
 import net.propero.rdp.Options;
+import net.propero.rdp.OrderSurface;
 import net.propero.rdp.Rdesktop;
-import net.propero.rdp.RdesktopCanvas;
 import net.propero.rdp.RdesktopException;
-import net.propero.rdp.RdesktopFrame;
-import net.propero.rdp.RdesktopFrame_Localised;
 import net.propero.rdp.Rdp;
 import net.propero.rdp.Version;
+import net.propero.rdp.api.RdesktopCallback;
 import net.propero.rdp.keymapping.KeyCode_FileBased;
 import net.propero.rdp.rdp5.Rdp5;
 import net.propero.rdp.rdp5.VChannels;
+import net.propero.rdp.rdp5.cliprdr.ClipChannel;
 import net.propero.rdp.tools.SendEvent;
+import net.propero.rdp.ui.RdesktopFrame;
 
-import com.google.gson.annotations.Expose;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.lwjgl.BufferUtils;
+
 import com.mumfrey.liteloader.LiteMod;
 import com.mumfrey.liteloader.PacketHandler;
 import com.mumfrey.liteloader.PlayerClickListener;
 import com.mumfrey.liteloader.PlayerInteractionListener.MouseButton;
 import com.mumfrey.liteloader.PreRenderListener;
-import com.mumfrey.liteloader.gl.GL;
-import com.mumfrey.liteloader.modconfig.ExposableOptions;
-import com.mumfrey.liteloader.RenderListener;
 
-public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler, PreRenderListener {
+public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler, PreRenderListener, RdesktopCallback {
 	// TODO: These things shouldn't be constant
 	private String server = "pi";
 	private String username = "pi";
 	private int width = 800, height = 600;
-
 	private Thread rdpThread;
 
-	private Logger logger = LogManager.getLogger();
+	private Logger LOGGER = LogManager.getLogger();
 
 	private int textureID = -1;
 
@@ -95,8 +88,6 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		textureID = glGenTextures();
 	}
 
-	private RdesktopCanvas canvas;
-
 	/** from {@link Rdesktop#main(String[])} */
 	private void initRDP() {
 		Runnable rdpRunnable = new Runnable() { @Override public void run() {
@@ -109,55 +100,63 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		keyMapLocation = "";
 		toolFrame = null;
 
-		Options.username = LiteModMcRdp.this.username;
-		Options.width = LiteModMcRdp.this.width;
-		Options.height = LiteModMcRdp.this.height;
+		Options options = new Options();
+
+		options.username = LiteModMcRdp.this.username;
+		options.width = LiteModMcRdp.this.width;
+		options.height = LiteModMcRdp.this.height;
 
 		// ... skip option parsing ...
 
 		// Now do the startup...
 
-		VChannels channels = new VChannels();
+		VChannels channels = new VChannels(options);
+
+		ClipChannel clipChannel = new ClipChannel(options);
 
 		// Initialise all RDP5 channels
-		if (Options.use_rdp5) {
+		if (options.use_rdp5) {
 			// TODO: implement all relevant channels
-			//if (Options.map_clipboard)
-			//	channels.register(clipChannel);
+			if (options.map_clipboard) {
+				try {
+					channels.register(clipChannel);
+				} catch (RdesktopException ex) {
+					LOGGER.warn("Failed to register clipChannel", ex);
+				}
+			}
 		}
 
 		// Now do the startup...
 
-		logger.info("properJavaRDP version " + Version.version);
-
-		//if (args.length == 0)
-		//	usage();
+		LOGGER.info("properJavaRDP version " + Version.version);
 
 		String java = System.getProperty("java.specification.version");
-		logger.info("Java version is " + java);
+		LOGGER.info("Java version is " + java);
 
 		String os = System.getProperty("os.name");
 		String osvers = System.getProperty("os.version");
 
-		if (os.equals("Windows 2000") || os.equals("Windows XP"))
-			Options.built_in_licence = true;
+		if (os.equals("Windows 2000") || os.equals("Windows XP")) {
+			options.built_in_licence = true;
+		}
 
-		logger.info("Operating System is " + os + " version " + osvers);
+		LOGGER.info("Operating System is " + os + " version " + osvers);
 
-		if (os.startsWith("Linux"))
-			Constants.OS = Constants.LINUX;
-		else if (os.startsWith("Windows"))
-			Constants.OS = Constants.WINDOWS;
-		else if (os.startsWith("Mac"))
-			Constants.OS = Constants.MAC;
+		if (os.startsWith("Linux")) {
+			options.os = Options.OS.LINUX;
+		} else if (os.startsWith("Windows")) {
+			options.os = Options.OS.WINDOWS;
+		} else if (os.startsWith("Mac")) {
+			options.os = Options.OS.MAC;
+		}
 
-		if (Constants.OS == Constants.MAC)
-			Options.caps_sends_up_and_down = false;
+		if (options.os == Options.OS.MAC) {
+			options.caps_sends_up_and_down = false;
+		}
 
 		Rdp5 RdpLayer = null;
-		Common.rdp = RdpLayer;
-		RdesktopFrame window = new RdesktopFrame_Localised();
-		window.setClip(null/*clipChannel*/);
+		RdesktopFrame window = new RdesktopFrame(options);
+		window.setClip(clipChannel);
 
 		// Configure a keyboard layout
 		KeyCode_FileBased keyMap = null;
@@ -167,176 +166,172 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 					+ keyMapPath + mapFile);
 			// logger.info("istr = " + istr);
 			if (istr == null) {
-				logger.debug("Loading keymap from filename");
-				keyMap = new KeyCode_FileBased_Localised(keyMapPath + mapFile);
+				LOGGER.debug("Loading keymap from filename");
+				keyMap = new KeyCode_FileBased(options, keyMapPath + mapFile);
 			} else {
-				logger.debug("Loading keymap from InputStream");
-				keyMap = new KeyCode_FileBased_Localised(istr);
+				LOGGER.debug("Loading keymap from InputStream");
+				keyMap = new KeyCode_FileBased(options, istr);
 			}
-			if (istr != null)
+			if (istr != null) {
 				istr.close();
-			Options.keylayout = keyMap.getMapCode();
+			}
+			options.keylayout = keyMap.getMapCode();
 		} catch (Exception kmEx) {
+			LOGGER.warn("Unexpected keymap exception: ", kmEx);
 			String[] msg = { (kmEx.getClass() + ": " + kmEx.getMessage()) };
 			window.showErrorDialog(msg);
-			kmEx.printStackTrace();
 			Rdesktop.exit(0, null, null, true);
 		}
 
-		logger.debug("Registering keyboard...");
-		if (keyMap != null)
+		LOGGER.debug("Registering keyboard...");
+		if (keyMap != null) {
 			window.registerKeyboard(keyMap);
+		}
 
-		boolean[] deactivated = new boolean[1];
-		int[] ext_disc_reason = new int[1];
-
-		logger.debug("keep_running = " + keep_running);
+		LOGGER.debug("keep_running = " + keep_running);
 		while (keep_running) {
-			logger.debug("Initialising RDP layer...");
-			RdpLayer = new Rdp5(channels);
-			Common.rdp = RdpLayer;
-			logger.debug("Registering drawing surface...");
+			LOGGER.debug("Initialising RDP layer...");
+			RdpLayer = new Rdp5(options, channels);
+			clipChannel.setSecure(RdpLayer.SecureLayer);  // XXX this shouldn't be needed
+			LOGGER.debug("Registering drawing surface...");
 			RdpLayer.registerDrawingSurface(window);
-			logger.debug("Registering comms layer...");
+			LOGGER.debug("Registering comms layer...");
 			window.registerCommLayer(RdpLayer);
-			LiteModMcRdp.this.canvas = window.getCanvas();
 			loggedon = false;
 			readytosend = false;
-			logger
-					.info("Connecting to " + server + ":" + Options.port
-							+ " ...");
+			LOGGER
+			.info("Connecting to " + server + ":" + options.port
+					+ " ...");
 
-			if (server.equalsIgnoreCase("localhost"))
+			if (server.equalsIgnoreCase("localhost")) {
 				server = "127.0.0.1";
+			}
 
-			if (RdpLayer != null) {
-				// Attempt to connect to server on port Options.port
-				try {
-					RdpLayer.connect(Options.username, InetAddress
-							.getByName(server), Rdp.RDP_LOGON_NORMAL, Options.domain,
-							Options.password, Options.command,
-							Options.directory);
+			// Attempt to connect to server on port options.port
+			try {
+				RdpLayer.connect(options.username, InetAddress
+						.getByName(server), Rdp.RDP_LOGON_NORMAL, options.domain,
+						options.password, options.command,
+						options.directory);
 
-					// Remove to get rid of sendEvent tool
-					if (showTools) {
-						toolFrame = new SendEvent(RdpLayer);
-						toolFrame.show();
+				// Remove to get rid of sendEvent tool
+				if (showTools) {
+					toolFrame = new SendEvent(RdpLayer);
+					toolFrame.show();
+				}
+				// End
+
+				if (keep_running) {
+
+					/*
+					 * By setting encryption to False here, we have an
+					 * encrypted login packet but unencrypted transfer of
+					 * other packets
+					 */
+					if (!options.packet_encryption) {
+						options.encryption = false;
 					}
-					// End
 
-					if (keep_running) {
+					LOGGER.info("Connection successful");
+					// now show window after licence negotiation
+					DisconnectInfo info = RdpLayer.mainLoop();
 
-						/*
-						 * By setting encryption to False here, we have an
-						 * encrypted login packet but unencrypted transfer of
-						 * other packets
-						 */
-						if (!Options.packet_encryption)
-							Options.encryption = false;
+					LOGGER.info("Disconnect: " + info);
 
-						logger.info("Connection successful");
-						// now show window after licence negotiation
-						RdpLayer.mainLoop(deactivated, ext_disc_reason);
-
-						if (deactivated[0]) {
-							/* clean disconnect */
+					if (info.wasCleanDisconnect()) {
+						/* clean disconnect */
+						Rdesktop.exit(0, RdpLayer, window, true);
+						// return 0;
+					} else {
+						if (info.getReason() == Reason.RPC_INITIATED_DISCONNECT
+								|| info.getReason() == Reason.RPC_INITIATED_DISCONNECT) {
+							/*
+							 * not so clean disconnect, but nothing to worry
+							 * about
+							 */
 							Rdesktop.exit(0, RdpLayer, window, true);
 							// return 0;
 						} else {
-							if (ext_disc_reason[0] == exDiscReasonAPIInitiatedDisconnect
-									|| ext_disc_reason[0] == exDiscReasonAPIInitiatedLogoff) {
-								/*
-								 * not so clean disconnect, but nothing to worry
-								 * about
-								 */
-								Rdesktop.exit(0, RdpLayer, window, true);
-								// return 0;
-							}
-
-							if (ext_disc_reason[0] >= 2) {
-								String reason = textDisconnectReason(ext_disc_reason[0]);
-								String msg[] = { "Connection terminated",
-										reason };
-								window.showErrorDialog(msg);
-								logger.warn("Connection terminated: " + reason);
-								Rdesktop.exit(0, RdpLayer, window, true);
-							}
-
-						}
-
-						keep_running = false; // exited main loop
-						if (!readytosend) {
-							// maybe the licence server was having a comms
-							// problem, retry?
-							String msg1 = "The terminal server disconnected before licence negotiation completed.";
-							String msg2 = "Possible cause: terminal server could not issue a licence.";
-							String[] msg = { msg1, msg2 };
-							logger.warn(msg1);
-							logger.warn(msg2);
+							String reason = info.toString();
+							String msg[] = { "Connection terminated",
+									reason };
 							window.showErrorDialog(msg);
+							LOGGER.warn("Connection terminated: " + reason);
+							Rdesktop.exit(0, RdpLayer, window, true);
 						}
-					} // closing bracket to if(running)
 
-					// Remove to get rid of tool window
-					if (showTools)
-						toolFrame.dispose();
-					// End
-
-				} catch (ConnectionException e) {
-					String msg[] = { "Connection Exception", e.getMessage() };
-					window.showErrorDialog(msg);
-					Rdesktop.exit(0, RdpLayer, window, true);
-				} catch (UnknownHostException e) {
-					error(e, RdpLayer, window, true);
-				} catch (SocketException s) {
-					if (RdpLayer.isConnected()) {
-						logger.fatal(s.getClass().getName() + " "
-								+ s.getMessage());
-						// s.printStackTrace();
-						error(s, RdpLayer, window, true);
-						Rdesktop.exit(0, RdpLayer, window, true);
 					}
-				} catch (RdesktopException e) {
-					String msg1 = e.getClass().getName();
-					String msg2 = e.getMessage();
-					logger.fatal(msg1 + ": " + msg2);
 
-					e.printStackTrace(System.err);
-
+					keep_running = false; // exited main loop
 					if (!readytosend) {
 						// maybe the licence server was having a comms
 						// problem, retry?
-						String msg[] = {
-								"The terminal server reset connection before licence negotiation completed.",
-								"Possible cause: terminal server could not connect to licence server.",
-								"Retry?" };
-						boolean retry = window.showYesNoErrorDialog(msg);
-						if (!retry) {
-							logger.info("Selected not to retry.");
-							Rdesktop.exit(0, RdpLayer, window, true);
-						} else {
-							if (RdpLayer != null && RdpLayer.isConnected()) {
-								logger.info("Disconnecting ...");
-								RdpLayer.disconnect();
-								logger.info("Disconnected");
-							}
-							logger.info("Retrying connection...");
-							keep_running = true; // retry
-							continue;
-						}
-					} else {
-						String msg[] = { e.getMessage() };
+						String msg1 = "The terminal server disconnected before licence negotiation completed.";
+						String msg2 = "Possible cause: terminal server could not issue a licence.";
+						String[] msg = { msg1, msg2 };
+						LOGGER.warn(msg1);
+						LOGGER.warn(msg2);
 						window.showErrorDialog(msg);
-						Rdesktop.exit(0, RdpLayer, window, true);
 					}
-				} catch (Exception e) {
-					logger.warn(e.getClass().getName() + " " + e.getMessage());
-					e.printStackTrace();
-					error(e, RdpLayer, window, true);
+				} // closing bracket to if(running)
+
+				// Remove to get rid of tool window
+				if (showTools)
+				{
+					toolFrame.dispose();
+					// End
 				}
-			} else { // closing bracket to if(!rdp==null)
-				logger
-						.fatal("The communications layer could not be initiated!");
+
+			} catch (ConnectionException e) {
+				LOGGER.warn("Connection exception", e);
+				String msg[] = { "Connection Exception", e.getMessage() };
+				window.showErrorDialog(msg);
+				Rdesktop.exit(0, RdpLayer, window, true);
+			} catch (UnknownHostException e) {
+				LOGGER.warn("Unknown host exception", e);
+				error(e, RdpLayer);
+			} catch (SocketException s) {
+				LOGGER.warn("Socket exception", s);
+				if (RdpLayer.isConnected()) {
+					LOGGER.fatal(s.getClass().getName() + " "
+							+ s.getMessage());
+					error(s, RdpLayer);
+					Rdesktop.exit(0, RdpLayer, window, true);
+				}
+			} catch (RdesktopException e) {
+				String msg1 = e.getClass().getName();
+				String msg2 = e.getMessage();
+				LOGGER.fatal(msg1 + ": " + msg2, e);
+
+				if (!readytosend) {
+					// maybe the licence server was having a comms
+					// problem, retry?
+					String msg[] = {
+							"The terminal server reset connection before licence negotiation completed.",
+							"Possible cause: terminal server could not connect to licence server.",
+					"Retry?" };
+					boolean retry = window.showYesNoErrorDialog(msg);
+					if (!retry) {
+						LOGGER.info("Selected not to retry.");
+						Rdesktop.exit(0, RdpLayer, window, true);
+					} else {
+						if (RdpLayer != null && RdpLayer.isConnected()) {
+							LOGGER.info("Disconnecting ...");
+							RdpLayer.disconnect();
+							LOGGER.info("Disconnected");
+						}
+						LOGGER.info("Retrying connection...");
+						keep_running = true; // retry
+						continue;
+					}
+				} else {
+					String msg[] = { e.getMessage() };
+					window.showErrorDialog(msg);
+					Rdesktop.exit(0, RdpLayer, window, true);
+				}
+			} catch (Exception e) {
+				LOGGER.warn("Other unhandled exception: " + e.getClass().getName() + " " + e.getMessage(), e);
+				error(e, RdpLayer);
 			}
 		}
 		Rdesktop.exit(0, RdpLayer, window, true);
@@ -474,7 +469,7 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		}
 	}
 
-	private void bindImage(RdesktopCanvas image) {
+	private void bindImage(OrderSurface image) {
 		// http://www.java-gaming.org/index.php?topic=25516.0
 		int[] pixels = image.getImage(0, 0, image.getWidth(), image.getHeight());
 
@@ -545,5 +540,58 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 	@Override
 	public void onRenderTerrain(float partialTicks, int pass) {
 
+	}
+
+	@Nullable
+	private OrderSurface canvas;
+
+	@Override
+	public Cursor createCursor(int arg0, int arg1, int arg2, int arg3,
+			byte[] arg4, byte[] arg5, int arg6) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public void error(Exception arg0, Rdp arg1) {
+		LOGGER.warn("Ex!", arg0);
+	}
+
+	@Override
+	public Cursor getCursor() {
+		return null;
+	}
+
+	@Override
+	public void markDirty(int arg0, int arg1, int arg2, int arg3) {
+
+	}
+
+	@Override
+	public void movePointer(int arg0, int arg1) {
+		
+	}
+
+	@Override
+	public void registerSurface(OrderSurface arg0) {
+		this.canvas = arg0;
+	}
+
+	@Override
+	public void setCursor(Cursor arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void sizeChanged(int arg0, int arg1) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void triggerReadyToSend() {
+		// TODO Auto-generated method stub
+		
 	}
 }

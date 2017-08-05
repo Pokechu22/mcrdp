@@ -1,12 +1,10 @@
 package mcrdp;
 
-import static net.propero.rdp.Rdesktop.*;
 // Unfortunate use of global variables
 import static org.lwjgl.opengl.GL11.*;
 
 import java.awt.Cursor;
 import java.io.File;
-import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
@@ -45,11 +43,7 @@ import net.propero.rdp.Rdp;
 import net.propero.rdp.Version;
 import net.propero.rdp.api.InitState;
 import net.propero.rdp.api.RdesktopCallback;
-import net.propero.rdp.keymapping.KeyCode_FileBased;
 import net.propero.rdp.rdp5.VChannels;
-import net.propero.rdp.rdp5.cliprdr.ClipChannel;
-import net.propero.rdp.tools.SendEvent;
-import net.propero.rdp.ui.RdesktopFrame;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -92,7 +86,7 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 	private void initRDP() {
 		Runnable rdpRunnable = new Runnable() { @Override public void run() {
 
-		String mapFile = "en-us";
+		// String mapFile = "en-us";
 		int logonflags = Rdp.RDP_LOGON_NORMAL;
 
 		Options options = new Options();

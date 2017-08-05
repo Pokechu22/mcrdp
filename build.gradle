@@ -41,8 +41,8 @@ apply plugin: 'net.minecraftforge.gradle.liteloader'
 //apply plugin: 'org.spongepowered.mixin'
 
 minecraft {
-    version = "1.12"
-    mappings = "snapshot_20170705"
+    version = "1.12.1"
+    mappings = "snapshot_20170804"
     runDir = "run"
 }
 

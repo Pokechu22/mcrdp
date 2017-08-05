@@ -43,9 +43,9 @@ import net.propero.rdp.Rdesktop;
 import net.propero.rdp.RdesktopException;
 import net.propero.rdp.Rdp;
 import net.propero.rdp.Version;
+import net.propero.rdp.api.InitState;
 import net.propero.rdp.api.RdesktopCallback;
 import net.propero.rdp.keymapping.KeyCode_FileBased;
-import net.propero.rdp.rdp5.Rdp5;
 import net.propero.rdp.rdp5.VChannels;
 import net.propero.rdp.rdp5.cliprdr.ClipChannel;
 import net.propero.rdp.tools.SendEvent;
@@ -92,13 +92,8 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 	private void initRDP() {
 		Runnable rdpRunnable = new Runnable() { @Override public void run() {
 
-		keep_running = true;
-		loggedon = false;
-		readytosend = false;
-		showTools = false;
-		mapFile = "en-us";
-		keyMapLocation = "";
-		toolFrame = null;
+		String mapFile = "en-us";
+		int logonflags = Rdp.RDP_LOGON_NORMAL;
 
 		Options options = new Options();
 
@@ -107,26 +102,6 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		options.height = LiteModMcRdp.this.height;
 
 		// ... skip option parsing ...
-
-		// Now do the startup...
-
-		VChannels channels = new VChannels(options);
-
-		ClipChannel clipChannel = new ClipChannel(options);
-
-		// Initialise all RDP5 channels
-		if (options.use_rdp5) {
-			// TODO: implement all relevant channels
-			if (options.map_clipboard) {
-				try {
-					channels.register(clipChannel);
-				} catch (RdesktopException ex) {
-					LOGGER.warn("Failed to register clipChannel", ex);
-				}
-			}
-		}
-
-		// Now do the startup...
 
 		LOGGER.info("properJavaRDP version " + Version.version);
 
@@ -154,10 +129,10 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 			options.caps_sends_up_and_down = false;
 		}
 
-		Rdp5 RdpLayer = null;
+		Rdp RdpLayer;
 
 		// Configure a keyboard layout
-		KeyCode_FileBased keyMap = null;
+		/*KeyCode_FileBased keyMap;
 		try {
 			// logger.info("looking for: " + "/" + keyMapPath + mapFile);
 			InputStream istr = Rdesktop.class.getResourceAsStream("/"
@@ -176,137 +151,114 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 			options.keylayout = keyMap.getMapCode();
 		} catch (Exception kmEx) {
 			LOGGER.warn("Unexpected keymap exception: ", kmEx);
+			String[] msg = { (kmEx.getClass() + ": " + kmEx.getMessage()) };
+			window.showErrorDialog(msg);
 			Rdesktop.exit(0, null, null, true);
+			return;
 		}
 
 		LOGGER.debug("Registering keyboard...");
-		if (keyMap != null) {
+		window.registerKeyboard(keyMap);*/
+
+		LOGGER.debug("Initialising RDP layer...");
+		RdpLayer = new Rdp(options);
+		LOGGER.debug("Registering drawing surface...");
+		RdpLayer.registerDrawingSurface(LiteModMcRdp.this);
+		LOGGER.debug("Registering comms layer...");
+		//LiteModMcRdp.this.registerCommLayer(RdpLayer);
+		LOGGER.info("Connecting to " + server + ":" + options.port
+				+ " ...");
+
+		if (server.equalsIgnoreCase("localhost")) {
+			server = "127.0.0.1";
 		}
 
-		LOGGER.debug("keep_running = " + keep_running);
-		while (keep_running) {
-			LOGGER.debug("Initialising RDP layer...");
-			RdpLayer = new Rdp5(options, channels);
-			clipChannel.setSecure(RdpLayer.SecureLayer);  // XXX this shouldn't be needed
-			LOGGER.debug("Registering drawing surface...");
-			RdpLayer.registerDrawingSurface(LiteModMcRdp.this);
-			LOGGER.debug("Registering comms layer...");
-			loggedon = false;
-			readytosend = false;
-			LOGGER
-			.info("Connecting to " + server + ":" + options.port
-					+ " ...");
+		// Attempt to connect to server on port options.port
+		try {
+			RdpLayer.connect(options.username, InetAddress
+					.getByName(server), logonflags, options.domain,
+					options.password, options.command,
+					options.directory);
 
-			if (server.equalsIgnoreCase("localhost")) {
-				server = "127.0.0.1";
-			}
+			LOGGER.info("Connection successful");
+			// now show window after licence negotiation
+			DisconnectInfo info = RdpLayer.mainLoop();
 
-			// Attempt to connect to server on port options.port
-			try {
-				RdpLayer.connect(options.username, InetAddress
-						.getByName(server), Rdp.RDP_LOGON_NORMAL, options.domain,
-						options.password, options.command,
-						options.directory);
+			LOGGER.info("Disconnect: " + info);
 
-				// Remove to get rid of sendEvent tool
-				if (showTools) {
-					toolFrame = new SendEvent(RdpLayer);
-					toolFrame.show();
-				}
-				// End
-
-				if (keep_running) {
-
-					/*
-					 * By setting encryption to False here, we have an
-					 * encrypted login packet but unencrypted transfer of
-					 * other packets
-					 */
-					if (!options.packet_encryption) {
-						options.encryption = false;
-					}
-
-					LOGGER.info("Connection successful");
-					// now show window after licence negotiation
-					DisconnectInfo info = RdpLayer.mainLoop();
-
-					LOGGER.info("Disconnect: " + info);
-
-					if (info.wasCleanDisconnect()) {
-						/* clean disconnect */
-						Rdesktop.exit(0, RdpLayer, null, true);
-						// return 0;
-					} else {
-						if (info.getReason() == Reason.RPC_INITIATED_DISCONNECT
-								|| info.getReason() == Reason.RPC_INITIATED_DISCONNECT) {
-							/*
-							 * not so clean disconnect, but nothing to worry
-							 * about
-							 */
-							Rdesktop.exit(0, RdpLayer, null, true);
-							// return 0;
-						} else {
-							String reason = info.toString();
-							LOGGER.warn("Connection terminated: " + reason);
-							Rdesktop.exit(0, RdpLayer, null, true);
-						}
-
-					}
-
-					keep_running = false; // exited main loop
-					if (!readytosend) {
-						// maybe the licence server was having a comms
-						// problem, retry?
-						String msg1 = "The terminal server disconnected before licence negotiation completed.";
-						String msg2 = "Possible cause: terminal server could not issue a licence.";
-						LOGGER.warn(msg1);
-						LOGGER.warn(msg2);
-					}
-				} // closing bracket to if(running)
-
-				// Remove to get rid of tool window
-				if (showTools)
-				{
-					toolFrame.dispose();
-					// End
-				}
-
-			} catch (ConnectionException e) {
-				LOGGER.warn("Connection exception", e);
+			if (info.wasCleanDisconnect()) {
+				/* clean disconnect */
 				Rdesktop.exit(0, RdpLayer, null, true);
-			} catch (UnknownHostException e) {
-				LOGGER.warn("Unknown host exception", e);
-				error(e, RdpLayer);
-			} catch (SocketException s) {
-				LOGGER.warn("Socket exception", s);
-				if (RdpLayer.isConnected()) {
-					LOGGER.fatal(s.getClass().getName() + " "
-							+ s.getMessage());
-					error(s, RdpLayer);
-				}
-			} catch (RdesktopException e) {
-				String msg1 = e.getClass().getName();
-				String msg2 = e.getMessage();
-				LOGGER.fatal(msg1 + ": " + msg2, e);
-
-				if (!readytosend) {
-					// maybe the licence server was having a comms
-					// problem, retry?
-					if (RdpLayer != null && RdpLayer.isConnected()) {
-						LOGGER.info("Disconnecting ...");
-						RdpLayer.disconnect();
-						LOGGER.info("Disconnected");
-					}
-					LOGGER.info("Retrying connection...");
-					keep_running = true; // retry
-					continue;
+				// return 0;
+			} else {
+				if (info.getReason() == Reason.RPC_INITIATED_DISCONNECT
+						|| info.getReason() == Reason.RPC_INITIATED_DISCONNECT) {
+					/*
+					 * not so clean disconnect, but nothing to worry
+					 * about
+					 */
+					Rdesktop.exit(0, RdpLayer, null, true);
+					// return 0;
 				} else {
+					String reason = info.toString();
+					String msg[] = { "Connection terminated",
+							reason };
+					//window.showErrorDialog(msg);
+					LOGGER.warn("Connection terminated: " + reason);
 					Rdesktop.exit(0, RdpLayer, null, true);
 				}
-			} catch (Exception e) {
-				LOGGER.warn("Other unhandled exception: " + e.getClass().getName() + " " + e.getMessage(), e);
-				error(e, RdpLayer);
+
 			}
+
+			if (RdpLayer.getState() != InitState.READY_TO_SEND) {
+				// maybe the licence server was having a comms
+				// problem, retry?
+				String msg1 = "The terminal server disconnected before licence negotiation completed.";
+				String msg2 = "Possible cause: terminal server could not issue a licence.";
+				String[] msg = { msg1, msg2 };
+				LOGGER.warn(msg1);
+				LOGGER.warn(msg2);
+				//window.showErrorDialog(msg);
+			}
+		} catch (ConnectionException e) {
+			LOGGER.warn("Connection exception", e);
+			String msg[] = { "Connection Exception", e.getMessage() };
+			//window.showErrorDialog(msg);
+			Rdesktop.exit(0, RdpLayer, null, true);
+		} catch (UnknownHostException e) {
+			LOGGER.warn("Unknown host exception", e);
+			Rdesktop.error(e, RdpLayer, null, true);
+		} catch (SocketException s) {
+			LOGGER.warn("Socket exception", s);
+			if (RdpLayer.isConnected()) {
+				LOGGER.fatal(s.getClass().getName() + " "
+						+ s.getMessage());
+				Rdesktop.error(s, RdpLayer, null, true);
+				Rdesktop.exit(0, RdpLayer, null, true);
+			}
+		} catch (RdesktopException e) {
+			String msg1 = e.getClass().getName();
+			String msg2 = e.getMessage();
+			LOGGER.fatal(msg1 + ": " + msg2, e);
+
+			if (RdpLayer.getState() != InitState.READY_TO_SEND) {
+				// maybe the licence server was having a comms
+				// problem, retry?
+				String msg[] = {
+						"The terminal server reset connection before licence negotiation completed.",
+						"Possible cause: terminal server could not connect to licence server." };
+				LOGGER.warn(msg1);
+				LOGGER.warn(msg2);
+				//window.showErrorDialog(msg);
+				Rdesktop.exit(0, RdpLayer, null, true);
+			} else {
+				String msg[] = { e.getMessage() };
+				//window.showErrorDialog(msg);
+				Rdesktop.exit(0, RdpLayer, null, true);
+			}
+		} catch (Exception e) {
+			LOGGER.warn("Other unhandled exception: " + e.getClass().getName() + " " + e.getMessage(), e);
+			Rdesktop.error(e, RdpLayer, null, true);
 		}
 		Rdesktop.exit(0, RdpLayer, null, true);
 		}};
@@ -564,8 +516,12 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 	}
 
 	@Override
-	public void triggerReadyToSend() {
-		// TODO Auto-generated method stub
-		
+	public void registerChannels(VChannels channels) {
+		// TODO: clipchannel
+	}
+
+	@Override
+	public void stateChanged(InitState state) {
+		LOGGER.info("State is now {}", state);
 	}
 }

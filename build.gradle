@@ -30,7 +30,7 @@ repositories {
 }
 
 dependencies {
-    compile 'unoficial.net.propero:properjavardp:1.1-tweaked-0.3-SNAPSHOT' // github.com/pokechu22/properjavardp
+    compile 'unoficial.net.propero:properjavardp:1.1-tweaked-0.4-SNAPSHOT' // github.com/pokechu22/properjavardp
 }
 
 version = "0.1"

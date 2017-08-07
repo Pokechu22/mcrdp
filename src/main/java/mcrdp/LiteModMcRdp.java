@@ -118,12 +118,13 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 			}
 			this.pos = pos;
 			this.facing = facing;
-			int offX = 0;
-			int offZ = 0;
+			double offX = 0;
+			double offZ = 0;
 			switch (facing) {
-			case NORTH: offX = 1; offZ = 1; break;
-			case EAST: offZ = 1; break;
-			case WEST: offX = 1; break;
+			case NORTH: offX = 1; offZ = 1 - Z_PUSH; break;
+			case SOUTH: offZ = Z_PUSH; break;
+			case EAST: offX = Z_PUSH; offZ = 1; break;
+			case WEST: offX = 1 - Z_PUSH; break;
 			default: break;
 			}
 			this.posVector = new Vec3d(pos.getX() + offX, pos.getY(), pos.getZ() + offZ);
@@ -146,6 +147,11 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 			}
 		}
 
+		/**
+		 * Push to avoid z-fighting: slightly larger than a sign.
+		 * (this will not always be in the Z direction)
+		 */
+		private static final float Z_PUSH = 2/16f;
 		/** Max look distance */
 		private static final int LOOK_DISTANCE = 64;
 
@@ -360,35 +366,30 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 	 * @param height The height in blocks (NOT the height of the image)
 	 */
 	private void drawImage(int width, int height) {
-		final float Z_PUSH = 2/16f; // To avoid z-fighting: slightly larger than a sign
-
 		glEnable(GL_TEXTURE_2D);
 		glBegin(GL_QUADS);
 		{
 			// This needs to be flipped vertically for some reason...
 			glTexCoord2f(0, 1);
-			glVertex3f(0, 0, Z_PUSH);
+			glVertex3f(0, 0, 0);
 
 			glTexCoord2f(1, 1);
-			glVertex3f(width, 0, Z_PUSH);
+			glVertex3f(width, 0, 0);
 
 			glTexCoord2f(1, 0);
-			glVertex3f(width, height, Z_PUSH);
+			glVertex3f(width, height, 0);
 
 			glTexCoord2f(0, 0);
-			glVertex3f(0, height, Z_PUSH);
+			glVertex3f(0, height, 0);
 		}
 		glEnd();
 		glDisable(GL_TEXTURE_2D);
 		glBegin(GL_QUADS);
 		{
-			glVertex3f(0, height, Z_PUSH);
-
-			glVertex3f(width, height, Z_PUSH);
-
-			glVertex3f(width, 0, Z_PUSH);
-
-			glVertex3f(0, 0, Z_PUSH);
+			glVertex3f(0, height, 0);
+			glVertex3f(width, height, 0);
+			glVertex3f(width, 0, 0);
+			glVertex3f(0, 0, 0);
 		}
 		glEnd();
 	}

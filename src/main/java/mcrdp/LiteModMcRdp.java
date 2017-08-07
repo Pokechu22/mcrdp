@@ -353,11 +353,6 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		try {
 			glPushMatrix();
 			glTranslated(info.posVector.x, info.posVector.y, info.posVector.z);
-			if (info.isLookedAt(minecraft.player)) {
-				glColor4f(1, 0, 0, 1);
-			} else {
-				glColor4f(1, 1, 1, 1);
-			}
 			switch (info.facing) {
 			case NORTH:
 				glRotatef(180, 0, 1, 0);

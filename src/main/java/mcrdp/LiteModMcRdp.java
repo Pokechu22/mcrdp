@@ -238,14 +238,18 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		if (optInfo.isPresent()) {
 			RDPInfo info = optInfo.get();
 			RDPInstance instance = instances.get(info.server);
-			Vec3d vec = info.calcLookVector(player);
-			assert vec != null : "Unexpected null look vector for looked at info";
-			int mouseX = (int) ((info.getLookedH(vec) / info.width) * instance.width);
-			int mouseY = (int) ((info.getLookedV(vec) / info.height) * instance.height);
-			// Attempt to click the mouse (doesn't work for unknown reasons)
-			instance.input.moveMouse(mouseX, mouseY);
-			instance.input.mouseButton(button.ordinal() + 1, true, mouseX, mouseY);
-			instance.input.mouseButton(button.ordinal() + 1, false, mouseX, mouseY);
+			if (!player.isSneaking()) {
+				Vec3d vec = info.calcLookVector(player);
+				assert vec != null : "Unexpected null look vector for looked at info";
+				int mouseX = (int) ((info.getLookedH(vec) / info.width) * instance.width);
+				int mouseY = instance.height - (int) ((info.getLookedV(vec) / info.height) * instance.height) - 1;
+				// Attempt to click the mouse (doesn't work for unknown reasons)
+				instance.input.moveMouse(mouseX, mouseY);
+				instance.input.mouseButton(button.ordinal() + 1, true, mouseX, mouseY);
+				instance.input.mouseButton(button.ordinal() + 1, false, mouseX, mouseY);
+			} else {
+				minecraft.displayGuiScreen(new GuiRDPControl(instance));
+			}
 			return false;
 		} else {
 			return true;

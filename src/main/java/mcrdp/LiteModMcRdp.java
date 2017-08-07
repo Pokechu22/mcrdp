@@ -7,6 +7,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import javax.annotation.Nullable;
 
@@ -160,7 +161,7 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		 * @return
 		 */
 		@Nullable
-		private Vec3d calcLookVector(Entity entity) {
+		public Vec3d calcLookVector(Entity entity) {
 			Vec3d start = entity.getPositionEyes(0); // TODO partialTicks
 			Vec3d end = entity.getLookVec() // TODO partialTicks
 					.normalize().scale(LOOK_DISTANCE).add(start);
@@ -173,7 +174,7 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		}
 
 		/** Gets the block that is being looked at horizontally */
-		private double getLookedH(Vec3d look) {
+		public double getLookedH(Vec3d look) {
 			switch (facing.getAxis()) {
 			case X: return (look.z - posVector.z) * -facing.getAxisDirection().getOffset();
 			case Y: return look.x - posVector.x;
@@ -182,7 +183,7 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 			}
 		}
 		/** Gets the block that is being looked at vertically */
-		private double getLookedV(Vec3d look) {
+		public double getLookedV(Vec3d look) {
 			switch (facing.getAxis()) {
 			case X: return look.y - posVector.y;
 			case Y: return look.z - posVector.z;
@@ -231,7 +232,24 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 
 	@Override
 	public boolean onMouseClicked(EntityPlayerSP player, MouseButton button) {
-		return true;
+		// TODO: sort by distance maybe
+		Optional<RDPInfo> optInfo = infos.stream()
+				.filter(i -> i.isLookedAt(player)).findAny();
+		if (optInfo.isPresent()) {
+			RDPInfo info = optInfo.get();
+			RDPInstance instance = instances.get(info.server);
+			Vec3d vec = info.calcLookVector(player);
+			assert vec != null : "Unexpected null look vector for looked at info";
+			int mouseX = (int) ((info.getLookedH(vec) / info.width) * instance.width);
+			int mouseY = (int) ((info.getLookedV(vec) / info.height) * instance.height);
+			// Attempt to click the mouse (doesn't work for unknown reasons)
+			instance.input.moveMouse(mouseX, mouseY);
+			instance.input.mouseButton(button.ordinal() + 1, true, mouseX, mouseY);
+			instance.input.mouseButton(button.ordinal() + 1, false, mouseX, mouseY);
+			return false;
+		} else {
+			return true;
+		}
 	}
 
 	@Override

@@ -9,6 +9,7 @@ import javax.annotation.Nullable;
 
 import net.propero.rdp.ConnectionException;
 import net.propero.rdp.DisconnectInfo;
+import net.propero.rdp.Input;
 import net.propero.rdp.Options;
 import net.propero.rdp.OrderSurface;
 import net.propero.rdp.Rdesktop;
@@ -18,6 +19,7 @@ import net.propero.rdp.Version;
 import net.propero.rdp.DisconnectInfo.Reason;
 import net.propero.rdp.api.InitState;
 import net.propero.rdp.api.RdesktopCallback;
+import net.propero.rdp.keymapping.KeyCode_FileBased;
 import net.propero.rdp.rdp5.VChannels;
 
 import org.apache.logging.log4j.LogManager;
@@ -28,8 +30,11 @@ public class RDPInstance implements RdesktopCallback {
 	public final String server;
 	private final String username;
 	private final String password;
-	private final int width, height;
+	public final int width, height;
 	private final Logger LOGGER;
+
+	// XXX this shouldn't need to be exposed
+	public Input input;
 
 	public RDPInstance(String server, String username, String password, int width, int height) {
 		if (server.equalsIgnoreCase("localhost")) {
@@ -135,7 +140,7 @@ public class RDPInstance implements RdesktopCallback {
 		LOGGER.debug("Registering drawing surface...");
 		RdpLayer.registerDrawingSurface(this);
 		LOGGER.debug("Registering comms layer...");
-		//LiteModMcRdp.this.registerCommLayer(RdpLayer);
+		input = new Input(options, RdpLayer, (KeyCode_FileBased) null); // XXX HACK should be sent from RDP to this
 		LOGGER.info("Connecting to " + server + ":" + options.port
 				+ " ...");
 

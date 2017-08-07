@@ -285,8 +285,6 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 			infos.stream().forEach(this::drawInfo);
 		}
 
-		//this.infos.forEach(info -> info.drawLookPosition(minecraft.player));
-
 		glPopMatrix();
 	}
 
@@ -313,8 +311,6 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		// whatever OpenGL method you want, for example:
 
 		// Do the drawing
-		glEnable(GL_TEXTURE_2D);
-
 		glBindTexture(GL_TEXTURE_2D, textureID); //Bind texture ID
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, image.getWidth(), image.getHeight(), 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
@@ -359,15 +355,17 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 	}
 
 	/**
-	 * Draws the given image at the current location, using the given width and height values.
+	 * Draws the given image at the current location, using the given width and height values.  Also draws a backing to it.
 	 * @param width The width in blocks (NOT the width of the image)
 	 * @param height The height in blocks (NOT the height of the image)
 	 */
 	private void drawImage(int width, int height) {
+		final float Z_PUSH = 2/16f; // To avoid z-fighting: slightly larger than a sign
+
+		glEnable(GL_TEXTURE_2D);
 		glBegin(GL_QUADS);
 		{
 			// This needs to be flipped vertically for some reason...
-			final float Z_PUSH = 2/16f; // To avoid z-fighting: slightly larger than a sign
 			glTexCoord2f(0, 1);
 			glVertex3f(0, 0, Z_PUSH);
 
@@ -379,6 +377,18 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 
 			glTexCoord2f(0, 0);
 			glVertex3f(0, height, Z_PUSH);
+		}
+		glEnd();
+		glDisable(GL_TEXTURE_2D);
+		glBegin(GL_QUADS);
+		{
+			glVertex3f(0, height, Z_PUSH);
+
+			glVertex3f(width, height, Z_PUSH);
+
+			glVertex3f(width, 0, Z_PUSH);
+
+			glVertex3f(0, 0, Z_PUSH);
 		}
 		glEnd();
 	}

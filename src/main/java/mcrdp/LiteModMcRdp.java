@@ -1,21 +1,12 @@
 package mcrdp;
 
-// Unfortunate use of global variables
 import static org.lwjgl.opengl.GL11.*;
 
-import java.awt.Cursor;
 import java.io.File;
-import java.net.InetAddress;
-import java.net.SocketException;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-
-import javax.annotation.Nullable;
 
 import net.minecraft.block.BlockWallSign;
 import net.minecraft.block.state.IBlockState;
@@ -28,42 +19,25 @@ import net.minecraft.network.INetHandler;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.SPacketChunkData;
 import net.minecraft.network.play.server.SPacketUpdateTileEntity;
+import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextFormatting;
-import net.propero.rdp.ConnectionException;
-import net.propero.rdp.DisconnectInfo;
-import net.propero.rdp.DisconnectInfo.Reason;
-import net.propero.rdp.Options;
 import net.propero.rdp.OrderSurface;
-import net.propero.rdp.Rdesktop;
-import net.propero.rdp.RdesktopException;
-import net.propero.rdp.Rdp;
-import net.propero.rdp.Version;
-import net.propero.rdp.api.InitState;
-import net.propero.rdp.api.RdesktopCallback;
-import net.propero.rdp.rdp5.VChannels;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.lwjgl.BufferUtils;
 
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.mumfrey.liteloader.LiteMod;
 import com.mumfrey.liteloader.PacketHandler;
 import com.mumfrey.liteloader.PlayerClickListener;
 import com.mumfrey.liteloader.PlayerInteractionListener.MouseButton;
 import com.mumfrey.liteloader.PreRenderListener;
 
-public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler, PreRenderListener, RdesktopCallback {
-	// TODO: These things shouldn't be constant
-	private String server = "pi";
-	private String username = "pi";
-	private int width = 800, height = 600;
-	private Thread rdpThread;
-
-	private Logger LOGGER = LogManager.getLogger();
-
+public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler, PreRenderListener {
+	private final Minecraft minecraft = Minecraft.getMinecraft();
 	private int textureID = -1;
 
 	@Override
@@ -78,186 +52,8 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 
 	@Override
 	public void init(File configPath) {
-		initRDP();
+		instances.put("pi", RDPInstance.create("pi", "pi", "", 800, 600));
 		textureID = glGenTextures();
-	}
-
-	/** from {@link Rdesktop#main(String[])} */
-	private void initRDP() {
-		Runnable rdpRunnable = new Runnable() { @Override public void run() {
-
-		// String mapFile = "en-us";
-		int logonflags = Rdp.RDP_LOGON_NORMAL;
-
-		Options options = new Options();
-
-		options.username = LiteModMcRdp.this.username;
-		options.width = LiteModMcRdp.this.width;
-		options.height = LiteModMcRdp.this.height;
-
-		// ... skip option parsing ...
-
-		LOGGER.info("properJavaRDP version " + Version.version);
-
-		String java = System.getProperty("java.specification.version");
-		LOGGER.info("Java version is " + java);
-
-		String os = System.getProperty("os.name");
-		String osvers = System.getProperty("os.version");
-
-		if (os.equals("Windows 2000") || os.equals("Windows XP")) {
-			options.built_in_licence = true;
-		}
-
-		LOGGER.info("Operating System is " + os + " version " + osvers);
-
-		if (os.startsWith("Linux")) {
-			options.os = Options.OS.LINUX;
-		} else if (os.startsWith("Windows")) {
-			options.os = Options.OS.WINDOWS;
-		} else if (os.startsWith("Mac")) {
-			options.os = Options.OS.MAC;
-		}
-
-		if (options.os == Options.OS.MAC) {
-			options.caps_sends_up_and_down = false;
-		}
-
-		Rdp RdpLayer;
-
-		// Configure a keyboard layout
-		/*KeyCode_FileBased keyMap;
-		try {
-			// logger.info("looking for: " + "/" + keyMapPath + mapFile);
-			InputStream istr = Rdesktop.class.getResourceAsStream("/"
-					+ keyMapPath + mapFile);
-			// logger.info("istr = " + istr);
-			if (istr == null) {
-				LOGGER.debug("Loading keymap from filename");
-				keyMap = new KeyCode_FileBased(options, keyMapPath + mapFile);
-			} else {
-				LOGGER.debug("Loading keymap from InputStream");
-				keyMap = new KeyCode_FileBased(options, istr);
-			}
-			if (istr != null) {
-				istr.close();
-			}
-			options.keylayout = keyMap.getMapCode();
-		} catch (Exception kmEx) {
-			LOGGER.warn("Unexpected keymap exception: ", kmEx);
-			String[] msg = { (kmEx.getClass() + ": " + kmEx.getMessage()) };
-			window.showErrorDialog(msg);
-			Rdesktop.exit(0, null, null, true);
-			return;
-		}
-
-		LOGGER.debug("Registering keyboard...");
-		window.registerKeyboard(keyMap);*/
-
-		LOGGER.debug("Initialising RDP layer...");
-		RdpLayer = new Rdp(options);
-		LOGGER.debug("Registering drawing surface...");
-		RdpLayer.registerDrawingSurface(LiteModMcRdp.this);
-		LOGGER.debug("Registering comms layer...");
-		//LiteModMcRdp.this.registerCommLayer(RdpLayer);
-		LOGGER.info("Connecting to " + server + ":" + options.port
-				+ " ...");
-
-		if (server.equalsIgnoreCase("localhost")) {
-			server = "127.0.0.1";
-		}
-
-		// Attempt to connect to server on port options.port
-		try {
-			RdpLayer.connect(options.username, InetAddress
-					.getByName(server), logonflags, options.domain,
-					options.password, options.command,
-					options.directory);
-
-			LOGGER.info("Connection successful");
-			// now show window after licence negotiation
-			DisconnectInfo info = RdpLayer.mainLoop();
-
-			LOGGER.info("Disconnect: " + info);
-
-			if (info.wasCleanDisconnect()) {
-				/* clean disconnect */
-				Rdesktop.exit(0, RdpLayer, null, true);
-				// return 0;
-			} else {
-				if (info.getReason() == Reason.RPC_INITIATED_DISCONNECT
-						|| info.getReason() == Reason.RPC_INITIATED_DISCONNECT) {
-					/*
-					 * not so clean disconnect, but nothing to worry
-					 * about
-					 */
-					Rdesktop.exit(0, RdpLayer, null, true);
-					// return 0;
-				} else {
-					String reason = info.toString();
-					String msg[] = { "Connection terminated",
-							reason };
-					//window.showErrorDialog(msg);
-					LOGGER.warn("Connection terminated: " + reason);
-					Rdesktop.exit(0, RdpLayer, null, true);
-				}
-
-			}
-
-			if (RdpLayer.getState() != InitState.READY_TO_SEND) {
-				// maybe the licence server was having a comms
-				// problem, retry?
-				String msg1 = "The terminal server disconnected before licence negotiation completed.";
-				String msg2 = "Possible cause: terminal server could not issue a licence.";
-				String[] msg = { msg1, msg2 };
-				LOGGER.warn(msg1);
-				LOGGER.warn(msg2);
-				//window.showErrorDialog(msg);
-			}
-		} catch (ConnectionException e) {
-			LOGGER.warn("Connection exception", e);
-			String msg[] = { "Connection Exception", e.getMessage() };
-			//window.showErrorDialog(msg);
-			Rdesktop.exit(0, RdpLayer, null, true);
-		} catch (UnknownHostException e) {
-			LOGGER.warn("Unknown host exception", e);
-			Rdesktop.error(e, RdpLayer, null, true);
-		} catch (SocketException s) {
-			LOGGER.warn("Socket exception", s);
-			if (RdpLayer.isConnected()) {
-				LOGGER.fatal(s.getClass().getName() + " "
-						+ s.getMessage());
-				Rdesktop.error(s, RdpLayer, null, true);
-				Rdesktop.exit(0, RdpLayer, null, true);
-			}
-		} catch (RdesktopException e) {
-			String msg1 = e.getClass().getName();
-			String msg2 = e.getMessage();
-			LOGGER.fatal(msg1 + ": " + msg2, e);
-
-			if (RdpLayer.getState() != InitState.READY_TO_SEND) {
-				// maybe the licence server was having a comms
-				// problem, retry?
-				String msg[] = {
-						"The terminal server reset connection before licence negotiation completed.",
-						"Possible cause: terminal server could not connect to licence server." };
-				LOGGER.warn(msg1);
-				LOGGER.warn(msg2);
-				//window.showErrorDialog(msg);
-				Rdesktop.exit(0, RdpLayer, null, true);
-			} else {
-				String msg[] = { e.getMessage() };
-				//window.showErrorDialog(msg);
-				Rdesktop.exit(0, RdpLayer, null, true);
-			}
-		} catch (Exception e) {
-			LOGGER.warn("Other unhandled exception: " + e.getClass().getName() + " " + e.getMessage(), e);
-			Rdesktop.error(e, RdpLayer, null, true);
-		}
-		Rdesktop.exit(0, RdpLayer, null, true);
-		}};
-		rdpThread = new Thread(rdpRunnable, "RDP thread");
-		rdpThread.start();
 	}
 
 	@Override
@@ -293,9 +89,48 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		return true;
 	}
 
-	private Map<BlockPos, RDPInfo> infos = new HashMap<BlockPos, RDPInfo>();
+	/**
+	 * Contains information about an RDP sign.
+	 */
+	public class RDPInfo {
+		public RDPInfo(BlockPos pos, EnumFacing facing, String[] lines) throws InvalidRDPException {
+			if (!lines[0].contains("mcrdp")) {
+				throw new InvalidRDPException(pos, "First line '" + lines[0] + "' doesn't contain 'mcrdp'");
+			}
+			if (lines[1].matches("\\d+x\\d+")) {
+				String[] part = lines[1].split("x");
+				width = Integer.parseInt(part[0]);
+				height = Integer.parseInt(part[1]);
+			} else if (lines[1].isEmpty()) {
+				width = 8;
+				height = 6;
+			} else {
+				throw new InvalidRDPException(pos, "Second line '" + lines[1] + "' should be empty or [width]x[height]");
+			}
+			if (instances.containsKey(lines[3])) {
+				server = lines[3];
+			} else {
+				throw new InvalidRDPException(pos, "Fourth line '" + lines[3] + "' does not contain a known RDP server");
+			}
+			this.pos = pos;
+			this.facing = facing;
+		}
+
+		public final BlockPos pos;
+		public final int width, height;
+		public final String server;
+		public final EnumFacing facing;
+	}
+
+	private Map<String, RDPInstance> instances = Maps.newHashMap();
+	private List<RDPInfo> infos = Lists.newArrayList();
 
 	private void handleNewTE(BlockPos pos, NBTTagCompound tag) {
+		IBlockState state = minecraft.world.getBlockState(pos);
+		if (state.getBlock() != Blocks.WALL_SIGN) {
+			return;
+		}
+
 		String[] lines = new String[4];
 		for (int i = 0; i < 4; i++) {
 			lines[i] = ITextComponent.Serializer.fromJsonLenient(tag.getString("Text" + (i + 1))).getUnformattedText();
@@ -305,12 +140,12 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 			return;
 		}
 		try {
-			infos.put(pos, new RDPInfo(pos, lines));
-			Minecraft.getMinecraft().ingameGUI.getChatGUI().printChatMessage(new TextComponentString("Test"));
+			infos.add(new RDPInfo(pos, state.getValue(BlockWallSign.FACING), lines));
+			minecraft.ingameGUI.getChatGUI().printChatMessage(new TextComponentString("Test"));
 		} catch (InvalidRDPException ex) {
 			ITextComponent component = new TextComponentString(ex.getMessage());
 			component.getStyle().setColor(TextFormatting.RED);
-			Minecraft.getMinecraft().ingameGUI.getChatGUI().printChatMessage(component);
+			minecraft.ingameGUI.getChatGUI().printChatMessage(component);
 		}
 	}
 
@@ -327,65 +162,55 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 	@Override
 	public void onSetupCameraTransform(float partialTicks, int pass,
 			long timeSlice) {
-		Minecraft minecraft = Minecraft.getMinecraft();
-
-		if (this.canvas == null || minecraft.world == null) {
-			if (!this.infos.isEmpty()) {
-				Minecraft.getMinecraft().ingameGUI.getChatGUI().printChatMessage(new TextComponentString("Freeing " + this.infos.size() + " entries"));
-				this.infos.clear();
-			}
+		if (minecraft.world == null) {
+			// Unload world check
+			minecraft.ingameGUI.getChatGUI().printChatMessage(new TextComponentString("Removed all " + this.infos.size() + " infos"));
 			return;
 		}
-		bindImage(canvas);
+		{
+			// Unloaded info check
+			int oldSize = this.infos.size();
+			boolean removedAny =
+					this.infos.removeIf(info -> minecraft.world.getBlockState(info.pos).getBlock() != Blocks.WALL_SIGN);
+			int newSize = this.infos.size();
+	
+			if (removedAny) {
+				minecraft.ingameGUI.getChatGUI().printChatMessage(new TextComponentString("Removed " + (oldSize - newSize) + " unloaded infos"));
+			}
+		}
 
-		EntityPlayerSP player = Minecraft.getMinecraft().player;
-		double x = player.lastTickPosX + (player.posX - player.lastTickPosX) * (double)partialTicks;
-		double y = player.lastTickPosY + (player.posY - player.lastTickPosY) * (double)partialTicks;
-		double z = player.lastTickPosZ + (player.posZ - player.lastTickPosZ) * (double)partialTicks;
-
-		for (Iterator<RDPInfo> itr = this.infos.values().iterator(); itr.hasNext();) {
-			RDPInfo info = itr.next();
-			// Check if unloaded, and delete as needed
-			IBlockState state = minecraft.world.getBlockState(info.pos);
-			if (state.getBlock() != Blocks.WALL_SIGN) {
-				Minecraft.getMinecraft().ingameGUI.getChatGUI().printChatMessage(new TextComponentString("Rem"));
-				itr.remove();
+		for (RDPInstance instance : instances.values()) {
+			if (instance.canvas == null) {
+				if (!this.infos.isEmpty()) {
+					int oldSize = this.infos.size();
+					boolean removedAny =
+							this.infos.removeIf(info -> info.server.equals(instance.server));
+					int newSize = this.infos.size();
+					if (removedAny) {
+						minecraft.ingameGUI.getChatGUI()
+								.printChatMessage(
+										new TextComponentString("Purged "
+												+ (oldSize - newSize)
+												+ " entries for dead instance "
+												+ instance.server));
+					}
+				}
 				continue;
 			}
 
-			// Render as such
-			try {
-				glPushMatrix();
-				glTranslated(-x, -y, -z);
-				glTranslatef(info.pos.getX(), info.pos.getY(), info.pos.getZ());
-				switch (state.getValue(BlockWallSign.FACING)) {
-				case NORTH:
-					glRotatef(180, 0, 1, 0);
-					glTranslatef(-1, 0, -1);
-					break;
-				case EAST:
-					glRotatef(90, 0, 1, 0);
-					glTranslatef(-1, 0, 0);
-					break;
-				case SOUTH:
-					// Noop
-					glRotatef(0, 0, 1, 0);
-					glTranslatef(0, 0, 0);
-					break;
-				case WEST:
-					glRotatef(270, 0, 1, 0);
-					glTranslatef(0, 0, -1);
-					break;
-				default:
-					// Unexpected values (up, down)
-					return;
-				}
-				drawImage(info.width, info.height);
-				glPopMatrix();
-			} catch (RuntimeException ex) {
-				ex.printStackTrace();
-				throw ex;
-			}
+			bindImage(instance.canvas);
+	
+			EntityPlayerSP player = minecraft.player;
+			double x = player.lastTickPosX + (player.posX - player.lastTickPosX) * (double)partialTicks;
+			double y = player.lastTickPosY + (player.posY - player.lastTickPosY) * (double)partialTicks;
+			double z = player.lastTickPosZ + (player.posZ - player.lastTickPosZ) * (double)partialTicks;
+
+			glPushMatrix();
+			glTranslated(-x, -y, -z);
+
+			infos.stream().forEach(this::drawInfo);
+
+			glPopMatrix();
 		}
 	}
 
@@ -417,6 +242,43 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		glBindTexture(GL_TEXTURE_2D, textureID); //Bind texture ID
 		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, image.getWidth(), image.getHeight(), 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+	}
+
+	/**
+	 * Draws a RDP info, assuming the texture already is bound.
+	 */
+	private void drawInfo(RDPInfo info) {
+		try {
+			glPushMatrix();
+			glTranslatef(info.pos.getX(), info.pos.getY(), info.pos.getZ());
+			switch (info.facing) {
+			case NORTH:
+				glRotatef(180, 0, 1, 0);
+				glTranslatef(-1, 0, -1);
+				break;
+			case EAST:
+				glRotatef(90, 0, 1, 0);
+				glTranslatef(-1, 0, 0);
+				break;
+			case SOUTH:
+				// Noop
+				glRotatef(0, 0, 1, 0);
+				glTranslatef(0, 0, 0);
+				break;
+			case WEST:
+				glRotatef(270, 0, 1, 0);
+				glTranslatef(0, 0, -1);
+				break;
+			default:
+				// Unexpected values (up, down)
+				return;
+			}
+			drawImage(info.width, info.height);
+			glPopMatrix();
+		} catch (RuntimeException ex) {
+			ex.printStackTrace();
+			throw ex;
+		}
 	}
 
 	/**
@@ -460,62 +322,5 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 	@Override
 	public void onRenderTerrain(float partialTicks, int pass) {
 
-	}
-
-	@Nullable
-	private OrderSurface canvas;
-
-	@Override
-	public Cursor createCursor(int arg0, int arg1, int arg2, int arg3,
-			byte[] arg4, byte[] arg5, int arg6) {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
-	public void error(Exception arg0, Rdp arg1) {
-		LOGGER.warn("Ex!", arg0);
-	}
-
-	@Override
-	public Cursor getCursor() {
-		return null;
-	}
-
-	@Override
-	public void markDirty(int arg0, int arg1, int arg2, int arg3) {
-
-	}
-
-	@Override
-	public void movePointer(int arg0, int arg1) {
-		
-	}
-
-	@Override
-	public void registerSurface(OrderSurface arg0) {
-		this.canvas = arg0;
-	}
-
-	@Override
-	public void setCursor(Cursor arg0) {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public void sizeChanged(int arg0, int arg1) {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public void registerChannels(VChannels channels) {
-		// TODO: clipchannel
-	}
-
-	@Override
-	public void stateChanged(InitState state) {
-		LOGGER.info("State is now {}", state);
 	}
 }

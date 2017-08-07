@@ -30,7 +30,7 @@ public class RDPInstance implements RdesktopCallback {
 	public final String server;
 	private final String username;
 	private final String password;
-	public final int width, height;
+	public int width, height;
 	private final Logger LOGGER;
 
 	// XXX this shouldn't need to be exposed
@@ -278,8 +278,9 @@ public class RDPInstance implements RdesktopCallback {
 
 	@Override
 	public void sizeChanged(int width, int height) {
-		// TODO Auto-generated method stub
-
+		this.width = width;
+		this.height = height;
+		LOGGER.info("Resized!  Size is now {} by {}", width, height);
 	}
 
 	@Override

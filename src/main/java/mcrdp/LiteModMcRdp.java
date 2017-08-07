@@ -8,11 +8,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import javax.annotation.Nullable;
+
 import net.minecraft.block.BlockWallSign;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.renderer.RenderGlobal;
+import net.minecraft.entity.Entity;
 import net.minecraft.init.Blocks;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.INetHandler;
@@ -21,6 +24,7 @@ import net.minecraft.network.play.server.SPacketChunkData;
 import net.minecraft.network.play.server.SPacketUpdateTileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextFormatting;
@@ -114,12 +118,82 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 			}
 			this.pos = pos;
 			this.facing = facing;
+			int offX = 0;
+			int offZ = 0;
+			switch (facing) {
+			case NORTH: offX = 1; offZ = 1; break;
+			case EAST: offZ = 1; break;
+			case WEST: offX = 1; break;
+			default: break;
+			}
+			this.posVector = new Vec3d(pos.getX() + offX, pos.getY(), pos.getZ() + offZ);
 		}
 
 		public final BlockPos pos;
-		public final int width, height;
+		public final Vec3d posVector;
+		public final int width, height; // in blocks
 		public final String server;
 		public final EnumFacing facing;
+
+		public boolean isLookedAt(Entity entity) {
+			Vec3d look = calcLookVector(entity);
+			if (look != null) {
+				double h = getLookedH(look);
+				double v = getLookedV(look);
+				return (h >= 0 && h < width) && (v >= 0 && v < height);
+			} else {
+				return false;
+			}
+		}
+
+		/** Max look distance */
+		private static final int LOOK_DISTANCE = 64;
+
+		/**
+		 * Calculates the given entity's look position along the plane of this info
+		 * @return
+		 */
+		@Nullable
+		private Vec3d calcLookVector(Entity entity) {
+			Vec3d start = entity.getPositionEyes(0); // TODO partialTicks
+			Vec3d end = entity.getLookVec() // TODO partialTicks
+					.normalize().scale(LOOK_DISTANCE).add(start);
+			switch (facing.getAxis()) {
+			case X: return start.getIntermediateWithXValue(end, posVector.x);
+			case Y: return start.getIntermediateWithYValue(end, posVector.y);
+			case Z: return start.getIntermediateWithZValue(end, posVector.z);
+			default: throw new AssertionError();
+			}
+		}
+
+		/** Gets the block that is being looked at horizontally */
+		private double getLookedH(Vec3d look) {
+			switch (facing.getAxis()) {
+			case X: return (look.z - posVector.z) * -facing.getAxisDirection().getOffset();
+			case Y: return look.x - posVector.x;
+			case Z: return (look.x - posVector.x) * facing.getAxisDirection().getOffset();
+			default: throw new AssertionError();
+			}
+		}
+		/** Gets the block that is being looked at vertically */
+		private double getLookedV(Vec3d look) {
+			switch (facing.getAxis()) {
+			case X: return look.y - posVector.y;
+			case Y: return look.z - posVector.z;
+			case Z: return look.y - posVector.y;
+			default: throw new AssertionError();
+			}
+		}
+
+		/**
+		 * DEBUG: draw the position that's being looked at
+		 */
+		public void drawLookPosition(Entity entity) {
+			Vec3d look = calcLookVector(entity);
+			if (look != null) {
+				RenderGlobal.renderFilledBox(look.x - .3, look.y - .3, look.z - .3, look.x + .3, look.y + .3, look.z + .3, 1, 0, 0, 1);
+			}
+		}
 	}
 
 	private Map<String, RDPInstance> instances = Maps.newHashMap();
@@ -179,6 +253,14 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 			}
 		}
 
+		EntityPlayerSP player = minecraft.player;
+		double x = player.lastTickPosX + (player.posX - player.lastTickPosX) * (double)partialTicks;
+		double y = player.lastTickPosY + (player.posY - player.lastTickPosY) * (double)partialTicks;
+		double z = player.lastTickPosZ + (player.posZ - player.lastTickPosZ) * (double)partialTicks;
+
+		glPushMatrix();
+		glTranslated(-x, -y, -z);
+
 		for (RDPInstance instance : instances.values()) {
 			if (instance.canvas == null) {
 				if (!this.infos.isEmpty()) {
@@ -199,19 +281,13 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 			}
 
 			bindImage(instance.canvas);
-	
-			EntityPlayerSP player = minecraft.player;
-			double x = player.lastTickPosX + (player.posX - player.lastTickPosX) * (double)partialTicks;
-			double y = player.lastTickPosY + (player.posY - player.lastTickPosY) * (double)partialTicks;
-			double z = player.lastTickPosZ + (player.posZ - player.lastTickPosZ) * (double)partialTicks;
-
-			glPushMatrix();
-			glTranslated(-x, -y, -z);
 
 			infos.stream().forEach(this::drawInfo);
-
-			glPopMatrix();
 		}
+
+		//this.infos.forEach(info -> info.drawLookPosition(minecraft.player));
+
+		glPopMatrix();
 	}
 
 	private void bindImage(OrderSurface image) {
@@ -240,7 +316,7 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		glEnable(GL_TEXTURE_2D);
 
 		glBindTexture(GL_TEXTURE_2D, textureID); //Bind texture ID
-		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, image.getWidth(), image.getHeight(), 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
 	}
 
@@ -250,24 +326,25 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 	private void drawInfo(RDPInfo info) {
 		try {
 			glPushMatrix();
-			glTranslatef(info.pos.getX(), info.pos.getY(), info.pos.getZ());
+			glTranslated(info.posVector.x, info.posVector.y, info.posVector.z);
+			if (info.isLookedAt(minecraft.player)) {
+				glColor4f(1, 0, 0, 1);
+			} else {
+				glColor4f(1, 1, 1, 1);
+			}
 			switch (info.facing) {
 			case NORTH:
 				glRotatef(180, 0, 1, 0);
-				glTranslatef(-1, 0, -1);
 				break;
 			case EAST:
 				glRotatef(90, 0, 1, 0);
-				glTranslatef(-1, 0, 0);
 				break;
 			case SOUTH:
 				// Noop
 				glRotatef(0, 0, 1, 0);
-				glTranslatef(0, 0, 0);
 				break;
 			case WEST:
 				glRotatef(270, 0, 1, 0);
-				glTranslatef(0, 0, -1);
 				break;
 			default:
 				// Unexpected values (up, down)

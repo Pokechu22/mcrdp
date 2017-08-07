@@ -1,12 +1,16 @@
 package mcrdp;
 
+import static org.lwjgl.opengl.GL11.*;
+
 import java.awt.Cursor;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
 
 import javax.annotation.Nullable;
 
+import net.minecraft.client.Minecraft;
 import net.propero.rdp.ConnectionException;
 import net.propero.rdp.DisconnectInfo;
 import net.propero.rdp.Input;
@@ -24,6 +28,7 @@ import net.propero.rdp.rdp5.VChannels;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.lwjgl.BufferUtils;
 
 /** A connection through RDP */
 public class RDPInstance implements RdesktopCallback {
@@ -32,6 +37,7 @@ public class RDPInstance implements RdesktopCallback {
 	private final String password;
 	public int width, height;
 	private final Logger LOGGER;
+	public final int glId = glGenTextures();
 
 	// XXX this shouldn't need to be exposed
 	public Input input;
@@ -56,7 +62,9 @@ public class RDPInstance implements RdesktopCallback {
 	 */
 	public static RDPInstance create(String server, @Nullable String username, @Nullable String password, int width, int height) {
 		RDPInstance instance = new RDPInstance(server, username, password, width, height);
-		new Thread(instance::connect, "RDP thread - " + server).start();
+		Thread thread = new Thread(instance::connect, "RDP thread - " + server);
+		thread.setUncaughtExceptionHandler((t, e) -> instance.LOGGER.fatal("Unhandled exception in " + t.getName(), e));
+		thread.start();
 		return instance;
 	}
 
@@ -239,6 +247,21 @@ public class RDPInstance implements RdesktopCallback {
 	@Nullable
 	private InitState state;
 
+	private ByteBuffer makeBuf(int[] pixels) {
+		ByteBuffer buffer = BufferUtils.createByteBuffer(pixels.length * 4);
+	
+		for (int pixel : pixels) {
+			buffer.put((byte) ((pixel >> 16) & 0xFF));  // Red
+			buffer.put((byte) ((pixel >> 8) & 0xFF));   // Green
+			buffer.put((byte) (pixel & 0xFF));          // Blue
+			buffer.put((byte) ((pixel >> 24) & 0xFF));  // Alpha
+		}
+	
+		buffer.flip();
+
+		return buffer;
+	}
+
 	@Override
 	public void error(Exception ex, Rdp rdp) {
 		LOGGER.warn("Ex!", ex);
@@ -246,7 +269,14 @@ public class RDPInstance implements RdesktopCallback {
 
 	@Override
 	public void markDirty(int x, int y, int width, int height) {
-
+		Minecraft.getMinecraft().addScheduledTask(() -> {
+			glBindTexture(GL_TEXTURE_2D, this.glId);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	
+			int[] pixels = canvas.getImage(x, y, width, height);
+			glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, makeBuf(pixels));
+		});
 	}
 
 	@Override
@@ -257,6 +287,17 @@ public class RDPInstance implements RdesktopCallback {
 	@Override
 	public void registerSurface(OrderSurface canvas) {
 		this.canvas = canvas;
+
+		Minecraft.getMinecraft().addScheduledTask(() -> {
+			glBindTexture(GL_TEXTURE_2D, this.glId);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	
+			int width = canvas.getWidth();
+			int height = canvas.getHeight();
+			int[] pixels = canvas.getImage(0, 0, width, height);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, makeBuf(pixels));
+		});
 	}
 
 	@Override
@@ -278,6 +319,14 @@ public class RDPInstance implements RdesktopCallback {
 
 	@Override
 	public void sizeChanged(int width, int height) {
+		Minecraft.getMinecraft().addScheduledTask(() -> {
+			glBindTexture(GL_TEXTURE_2D, this.glId);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			int[] pixels = new int[width * height]; // TODO
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, makeBuf(pixels));
+		});
+
 		this.width = width;
 		this.height = height;
 		LOGGER.info("Resized!  Size is now {} by {}", width, height);

@@ -3,7 +3,6 @@ package mcrdp;
 import static org.lwjgl.opengl.GL11.*;
 
 import java.io.File;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -29,9 +28,6 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextFormatting;
-import net.propero.rdp.OrderSurface;
-
-import org.lwjgl.BufferUtils;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -43,7 +39,6 @@ import com.mumfrey.liteloader.PreRenderListener;
 
 public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler, PreRenderListener {
 	private final Minecraft minecraft = Minecraft.getMinecraft();
-	private int textureID = -1;
 
 	@Override
 	public String getName() {
@@ -58,7 +53,6 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 	@Override
 	public void init(File configPath) {
 		instances.put("pi", RDPInstance.create("pi", "pi", "", 800, 600));
-		textureID = glGenTextures();
 	}
 
 	@Override
@@ -290,6 +284,8 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		glTranslated(-x, -y, -z);
 
 		for (RDPInstance instance : instances.values()) {
+			glBindTexture(GL_TEXTURE_2D, instance.glId);
+
 			if (instance.canvas == null) {
 				if (!this.infos.isEmpty()) {
 					int oldSize = this.infos.size();
@@ -308,42 +304,10 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 				continue;
 			}
 
-			bindImage(instance.canvas);
-
 			infos.stream().forEach(this::drawInfo);
 		}
 
 		glPopMatrix();
-	}
-
-	private void bindImage(OrderSurface image) {
-		// http://www.java-gaming.org/index.php?topic=25516.0
-		int width = image.getWidth();
-		int height = image.getHeight();
-		int[] pixels = image.getImage(0, 0, width, height);
-
-		ByteBuffer buffer = BufferUtils.createByteBuffer(width * height * 4); //4 for RGBA, 3 for RGB
-
-		for(int y = 0; y < height; y++){
-			for(int x = 0; x < width; x++){
-				int pixel = pixels[y * width + x];
-				buffer.put((byte) ((pixel >> 16) & 0xFF));     // Red component
-				buffer.put((byte) ((pixel >> 8) & 0xFF));      // Green component
-				buffer.put((byte) (pixel & 0xFF));               // Blue component
-				buffer.put((byte) ((pixel >> 24) & 0xFF));    // Alpha component. Only for RGBA
-			}
-		}
-
-		buffer.flip(); //FOR THE LOVE OF GOD DO NOT FORGET THIS
-
-		// You now have a ByteBuffer filled with the color data of each pixel.
-		// Now just create a texture ID and bind it. Then you can load it using 
-		// whatever OpenGL method you want, for example:
-
-		// Do the drawing
-		glBindTexture(GL_TEXTURE_2D, textureID); //Bind texture ID
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
 	}
 
 	/**

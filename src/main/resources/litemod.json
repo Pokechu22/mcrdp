@@ -3,5 +3,6 @@
   "displayName": "Minecraft RDP",
   "version": "0.1",
   "author": "pokechu22; properJavaRDP contributors",
-  "mcversion": "1.12.1"
+  "mcversion": "1.12.1",
+  "description": "Extremely useless mod that allows connecting to computers through RDP and displaying/interacting with them in game."
 }

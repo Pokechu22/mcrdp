@@ -63,6 +63,7 @@ litemod {
         mcversion = "1.12.1"
         //mixinConfigs += "mixins.mcrdp.json"
         version = project.version
+        description = "Extremely useless mod that allows connecting to computers through RDP and displaying/interacting with them in game."
     }
 }
 

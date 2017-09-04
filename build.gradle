@@ -54,7 +54,7 @@ litemod {
         name = "mcrdp"
         displayName = "Minecraft RDP"
         author = "pokechu22; properJavaRDP contributors"
-        mcversion = "1.12"
+        mcversion = "1.12.1"
         //mixinConfigs += "mixins.mcrdp.json"
         version = project.version
     }

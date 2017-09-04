@@ -44,8 +44,10 @@ minecraft {
     version = "1.12.1"
     mappings = "snapshot_20170804"
     runDir = "run"
+    makeObfSourceJar = false
 }
 
+libsDirName = "../libs/${version}"
 
 litemod {
     json {

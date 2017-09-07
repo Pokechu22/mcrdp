@@ -22,6 +22,7 @@ import net.minecraft.network.INetHandler;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.SPacketChunkData;
 import net.minecraft.network.play.server.SPacketUpdateTileEntity;
+import net.minecraft.tileentity.TileEntitySign;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
@@ -36,8 +37,9 @@ import com.mumfrey.liteloader.PacketHandler;
 import com.mumfrey.liteloader.PlayerClickListener;
 import com.mumfrey.liteloader.PlayerInteractionListener.MouseButton;
 import com.mumfrey.liteloader.PreRenderListener;
+import com.mumfrey.liteloader.Tickable;
 
-public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler, PreRenderListener {
+public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler, PreRenderListener, Tickable {
 	private final Minecraft minecraft = Minecraft.getMinecraft();
 
 	@Override
@@ -63,11 +65,16 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 
 	@Override
 	public List<Class<? extends Packet<?>>> getHandledPackets() {
-		List<Class<? extends Packet<?>>> packets = new ArrayList<Class<? extends Packet<?>>>();
+		List<Class<? extends Packet<?>>> packets = new ArrayList<>();
 		packets.add(SPacketChunkData.class);
 		packets.add(SPacketUpdateTileEntity.class);
 		return packets;
 	}
+
+	/**
+	 * Locations of newly added/updated sign block entities
+	 */
+	private final List<BlockPos> newSigns = new ArrayList<>();
 
 	@Override
 	public boolean handlePacket(INetHandler netHandler, Packet<?> packet) {
@@ -75,17 +82,25 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 			SPacketChunkData cpacket = (SPacketChunkData) packet;
 			for (NBTTagCompound tag : cpacket.getTileEntityTags()) {
 				if (tag.getString("id").toLowerCase().contains("sign")) {
-					handleNewTE(new BlockPos(tag.getInteger("x"), tag.getInteger("y"),
-							tag.getInteger("z")), tag);
+					newSigns.add(new BlockPos(tag.getInteger("x"), tag.getInteger("y"), tag.getInteger("z")));
 				}
 			}
 		} else if (packet instanceof SPacketUpdateTileEntity) {
 			SPacketUpdateTileEntity cpacket = (SPacketUpdateTileEntity) packet;
 			if (cpacket.getTileEntityType() == 9) {
-				handleNewTE(cpacket.getPos(), cpacket.getNbtCompound());
+				newSigns.add(cpacket.getPos());
 			}
 		}
 		return true;
+	}
+
+	@Override
+	public void onTick(Minecraft minecraft, float partialTicks, boolean inGame, boolean clock) {
+		if (!clock) {
+			return;
+		}
+		newSigns.forEach(this::handleNewTE);
+		newSigns.clear();
 	}
 
 	/**
@@ -200,15 +215,19 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 	private Map<String, RDPInstance> instances = Maps.newHashMap();
 	private List<RDPInfo> infos = Lists.newArrayList();
 
-	private void handleNewTE(BlockPos pos, NBTTagCompound tag) {
+	private void handleNewTE(BlockPos pos) {
 		IBlockState state = minecraft.world.getBlockState(pos);
 		if (state.getBlock() != Blocks.WALL_SIGN) {
+			return;
+		}
+		TileEntitySign sign = (TileEntitySign) minecraft.world.getTileEntity(pos);
+		if (sign == null) {
 			return;
 		}
 
 		String[] lines = new String[4];
 		for (int i = 0; i < 4; i++) {
-			lines[i] = ITextComponent.Serializer.fromJsonLenient(tag.getString("Text" + (i + 1))).getUnformattedText();
+			lines[i] = sign.signText[i].getUnformattedText();
 		}
 		if (!lines[0].contains("mcrdp")) {
 			// Nothing at all that can be wrong.

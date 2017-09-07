@@ -10,9 +10,9 @@ Right now, the build process isn't great.
 
 1. Download my tweaked version of [properJavaRDP](https://github.com/Pokechu22/properjavardp).
 2. Run `gradlew install` inside of properJavaRDP, to add it to your local maven repository.
-3. Open `src/main/java/mcrdp/LiteModMcRdp.java`.  Find `init` and then edit the list of instances to values you want (map key is the name used on signs, and parameters to `RDPInstance.create` are `ip`, `username`, `password, `width`, and `height`)  - the defaults will not work for you.  (Right now, these aren't changable in game - that will change).
-4. Run `gradlew runClient` inside of mcrdp.  ForgeGradle will spend a while setting up the workspace, and then the development launcher will start (you can choose "cancel" to enter offline mode).  Alternatively, run `gradlew build` to generate a 
-6. See usage below for setting up an RDP display ingame.
+3. Open `src/main/java/mcrdp/LiteModMcRdp.java`.  Find `init` and then edit the list of instances to values you want (map key is the name used on signs, and parameters to `RDPInstance.create` are `ip`, `username`, `password`, `width`, and `height`)  - the defaults will not work for you.  (Right now, these aren't changable in game - that will change).
+4. Run `gradlew runClient` to launch Minecraft.  ForgeGradle will spend a while setting up the workspace, and then the development launcher will start (you can choose "cancel" to enter offline mode).  Alternatively, run `gradlew build` to generate a litemod for use outside of the development workspace.
+5. See usage below for setting up an RDP display ingame.
 
 ## Usage
 

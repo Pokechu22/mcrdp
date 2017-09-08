@@ -24,19 +24,9 @@ buildscript {
 
 apply plugin: 'java'
 
-repositories {
-    mavenLocal()
-    mavenCentral()
-}
-
 configurations {
     provided
     compile.extendsFrom(provided)
-}
-
-dependencies {
-    provided 'unoficial.net.propero:properjavardp:1.1-tweaked-0.4-SNAPSHOT:mcdep@jar' // github.com/pokechu22/properjavardp
-    // @jar is used so that only mcdep dependencies are added (and not, say, log4j).
 }
 
 version = "0.1"
@@ -45,6 +35,16 @@ archivesBaseName = "mcrdp"
 
 apply plugin: 'net.minecraftforge.gradle.liteloader'
 //apply plugin: 'org.spongepowered.mixin'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    provided 'unoficial.net.propero:properjavardp:1.1-tweaked-0.4-SNAPSHOT:mcdep@jar' // github.com/pokechu22/properjavardp
+    // @jar is used so that only mcdep dependencies are added (and not, say, log4j).
+}
 
 minecraft {
     version = "1.12.1"

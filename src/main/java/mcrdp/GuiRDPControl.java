@@ -78,6 +78,15 @@ public class GuiRDPControl extends GuiScreen {
 	}
 
 	@Override
+	protected void keyTyped(char typedChar, int keyCode) throws IOException {
+		super.keyTyped(typedChar, keyCode);
+		if (typedChar != 0) {
+			instance.input.sendUnicode(typedChar, false);
+			instance.input.sendUnicode(typedChar, true);
+		}
+	}
+
+	@Override
 	protected void mouseClicked(int mouseX, int mouseY, int mouseButton)
 			throws IOException {
 		super.mouseClicked(mouseX, mouseY, mouseButton);

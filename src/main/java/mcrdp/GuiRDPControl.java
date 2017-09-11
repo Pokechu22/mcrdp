@@ -41,25 +41,22 @@ public class GuiRDPControl extends GuiScreen {
 	private int mouseButtons = 0;
 
 	private static final Logger LOGGER = LogManager.getLogger();
+	/** The cursor that was being used when the GUI was opened. */
 	private final Cursor oldCursor;
+	/**
+	 * The cursor that is currently being displayed (either the original cursor or
+	 * the instance's cursor)
+	 */
 	private Cursor cursor;
 
 	private final RDPInstance instance;
 	public GuiRDPControl(RDPInstance instance) {
 		this.instance = instance;
 		oldCursor = Mouse.getNativeCursor();
-		System.out.println(oldCursor);
 	}
 
 	@Override
 	public void initGui() {
-		try {
-			this.cursor = this.instance.getCursor();
-			Mouse.setNativeCursor(this.instance.getCursor());
-		} catch (LWJGLException e) {
-			LOGGER.warn("Failed to set cursor", e);
-		}
-
 		addButton(new GuiButton(0, width / 2 - 200 / 2, height - 40, I18n.format("gui.done")));
 
 		windowWidth = Math.max(Math.min(instance.width + 18, this.width - 200), 100);
@@ -178,10 +175,11 @@ public class GuiRDPControl extends GuiScreen {
 
 	@Override
 	public void updateScreen() {
-		if (this.cursor != instance.getCursor()) {
-			this.cursor = instance.getCursor();
+		Cursor expectedCursor = (rdpFocused ? instance.getCursor() : oldCursor);
+		if (this.cursor != expectedCursor) {
+			this.cursor = expectedCursor;
 			try {
-				Mouse.setNativeCursor(this.instance.getCursor());
+				Mouse.setNativeCursor(expectedCursor);
 			} catch (LWJGLException e) {
 				LOGGER.warn("Failed to update cursor", e);
 			}

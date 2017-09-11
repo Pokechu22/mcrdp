@@ -2,17 +2,24 @@ package mcrdp;
 
 import static org.lwjgl.opengl.GL11.*;
 
-import java.awt.Cursor;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
 
 import javax.annotation.Nullable;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.lwjgl.BufferUtils;
+import org.lwjgl.LWJGLException;
+import org.lwjgl.input.Cursor;
 
 import net.minecraft.client.Minecraft;
 import net.propero.rdp.ConnectionException;
 import net.propero.rdp.DisconnectInfo;
+import net.propero.rdp.DisconnectInfo.Reason;
 import net.propero.rdp.Input;
 import net.propero.rdp.Options;
 import net.propero.rdp.OrderSurface;
@@ -20,15 +27,10 @@ import net.propero.rdp.Rdesktop;
 import net.propero.rdp.RdesktopException;
 import net.propero.rdp.Rdp;
 import net.propero.rdp.Version;
-import net.propero.rdp.DisconnectInfo.Reason;
 import net.propero.rdp.api.InitState;
 import net.propero.rdp.api.RdesktopCallback;
 import net.propero.rdp.keymapping.KeyCode_FileBased;
 import net.propero.rdp.rdp5.VChannels;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.lwjgl.BufferUtils;
 
 /** A connection through RDP */
 public class RDPInstance implements RdesktopCallback {
@@ -38,6 +40,11 @@ public class RDPInstance implements RdesktopCallback {
 	public int width, height;
 	private final Logger LOGGER;
 	public final int glId = glGenTextures();
+	/**
+	 * The cursor currently being used.  Null indicates system cursor
+	 */
+	@Nullable
+	private Cursor cursor = null;
 
 	// XXX this shouldn't need to be exposed
 	public Input input;
@@ -301,20 +308,74 @@ public class RDPInstance implements RdesktopCallback {
 	}
 
 	@Override
-	public Cursor createCursor(int x, int y, int w, int h, byte[] andmask,
-			byte[] xormask, int cache_idx) {
-		// TODO Auto-generated method stub
-		return null;
+	public Cursor createCursor(int hotspotX, int hotspotY, int width, int height, byte[] andmask,
+			byte[] xormask) {
+		// Implementation is the same as RdesktopFrame.createCursor except that andIndex
+		// and xorIndex are not flipped
+		final int size = width * height;
+		final int scanline = width / 8;
+		boolean[] mask = new boolean[size];
+		int[] cursor = new int[size];
+
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < scanline; x++) {
+				int andIndex = y * scanline + x;
+
+				for (int bit = 0; bit < 8; bit++) {
+					int maskIndex = ((y * scanline) + x) * 8 + bit;
+					int bitmask = 0x80 >> bit;
+
+					if ((andmask[andIndex] & bitmask) != 0) {
+						mask[maskIndex] = true;
+					} else {
+						mask[maskIndex] = false;
+					}
+				}
+			}
+		}
+
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++) {
+				int xorIndex = (y * width + x) * 3;
+				int cursorIndex = y * width + x;
+				cursor[cursorIndex] = ((xormask[xorIndex + 2] << 16) & 0x00ff0000)
+						| ((xormask[xorIndex + 1] << 8) & 0x0000ff00)
+						| (xormask[xorIndex] & 0x000000ff);
+			}
+
+		}
+
+		for (int i = 0; i < size; i++) {
+			if ((mask[i] == true) && (cursor[i] != 0)) {
+				cursor[i] = ~(cursor[i]);
+				cursor[i] |= 0xff000000;
+			} else if ((mask[i] == false) || (cursor[i] != 0)) {
+				cursor[i] |= 0xff000000;
+			}
+		}
+
+		IntBuffer buffer = BufferUtils.createIntBuffer(cursor.length);
+		for (int pixel : cursor) {
+			buffer.put(pixel);
+		}
+
+		buffer.flip();
+
+		try {
+			return new Cursor(width, height, hotspotX, hotspotY, 1, buffer, null);
+		} catch (LWJGLException e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	@Override
+	public void setCursor(Object cursor) {
+		assert cursor instanceof Cursor : "Unexpected object " + cursor + " (" + (cursor != null ? cursor.getClass() : null) + ")";
+		this.cursor = (Cursor) cursor;
+	}
+
 	public Cursor getCursor() {
-		return null;
-	}
-
-	@Override
-	public void setCursor(Cursor cursor) {
-		// TODO Auto-generated method stub
+		return this.cursor;
 	}
 
 	@Override

@@ -2,6 +2,10 @@ package mcrdp;
 
 import java.io.IOException;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.lwjgl.LWJGLException;
+import org.lwjgl.input.Cursor;
 import org.lwjgl.input.Mouse;
 
 import net.minecraft.client.gui.GuiButton;
@@ -27,14 +31,26 @@ public class GuiRDPControl extends GuiScreen {
 	// Display info
 	private int dispWidth, dispHeight, dispX, dispY;
 
+	private static final Logger LOGGER = LogManager.getLogger();
+	private final Cursor oldCursor;
+	private Cursor cursor;
 
 	private final RDPInstance instance;
 	public GuiRDPControl(RDPInstance instance) {
 		this.instance = instance;
+		oldCursor = Mouse.getNativeCursor();
+		System.out.println(oldCursor);
 	}
 
 	@Override
 	public void initGui() {
+		try {
+			this.cursor = this.instance.getCursor();
+			Mouse.setNativeCursor(this.instance.getCursor());
+		} catch (LWJGLException e) {
+			LOGGER.warn("Failed to set cursor", e);
+		}
+
 		addButton(new GuiButton(0, width / 2 - 200 / 2, height - 40, I18n.format("gui.done")));
 
 		windowWidth = Math.max(Math.min(instance.width + 18, this.width - 200), 100);
@@ -130,6 +146,27 @@ public class GuiRDPControl extends GuiScreen {
 	protected void actionPerformed(GuiButton button) throws IOException {
 		if (button.id == 0) {
 			mc.displayGuiScreen(null);
+		}
+	}
+
+	@Override
+	public void updateScreen() {
+		if (this.cursor != instance.getCursor()) {
+			this.cursor = instance.getCursor();
+			try {
+				Mouse.setNativeCursor(this.instance.getCursor());
+			} catch (LWJGLException e) {
+				LOGGER.warn("Failed to update cursor", e);
+			}
+		}
+	}
+
+	@Override
+	public void onGuiClosed() {
+		try {
+			Mouse.setNativeCursor(this.oldCursor);
+		} catch (LWJGLException e) {
+			LOGGER.warn("Failed to reset cursor", e);
 		}
 	}
 }

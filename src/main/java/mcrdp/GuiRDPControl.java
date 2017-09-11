@@ -31,6 +31,15 @@ public class GuiRDPControl extends GuiScreen {
 	// Display info
 	private int dispWidth, dispHeight, dispX, dispY;
 
+	/**
+	 * True if the RDP screen is currently focused.
+	 */
+	private boolean rdpFocused = false;
+	/**
+	 * A bitmask of mouse buttons that are currently held.
+	 */
+	private int mouseButtons = 0;
+
 	private static final Logger LOGGER = LogManager.getLogger();
 	private final Cursor oldCursor;
 	private Cursor cursor;
@@ -70,6 +79,16 @@ public class GuiRDPControl extends GuiScreen {
 		GlStateManager.enableBlend();
 
 		mc.getTextureManager().bindTexture(WINDOW);
+		int x = mouseX - dispX;
+		int y = mouseY - dispY;
+		if (mouseButtons == 0) {
+			// Only re-evaluate focus when there are no mouse buttons held (to allow
+			// dragging out of bounds) 
+			this.rdpFocused = (x >= 0 && x < dispWidth && y >= 0 && y < dispHeight);
+		}
+		if (rdpFocused) {
+			GlStateManager.color(.75f, .75f, .75f);
+		}
 		drawTexturedModalRect(windowX, windowY, 0, 0, WINDOW_EDGE_SIZE, WINDOW_EDGE_SIZE);
 		drawScaledCustomSizeModalRect(windowX + WINDOW_EDGE_SIZE, windowY, WINDOW_EDGE_SIZE, 0, WINDOW_HORIZ_WIDTH, WINDOW_EDGE_SIZE, windowWidth - 2 * WINDOW_EDGE_SIZE, WINDOW_EDGE_SIZE, 256, 256);
 		drawTexturedModalRect(windowX + windowWidth - WINDOW_EDGE_SIZE, windowY, WINDOW_LOWER_U, 0, WINDOW_EDGE_SIZE, WINDOW_EDGE_SIZE);
@@ -79,14 +98,13 @@ public class GuiRDPControl extends GuiScreen {
 		drawScaledCustomSizeModalRect(windowX + WINDOW_EDGE_SIZE, windowY + windowHeight - WINDOW_EDGE_SIZE, WINDOW_EDGE_SIZE, WINDOW_LOWER_V, WINDOW_HORIZ_WIDTH, WINDOW_EDGE_SIZE, windowWidth - 2 * WINDOW_EDGE_SIZE, WINDOW_EDGE_SIZE, 256, 256);
 		drawTexturedModalRect(windowX + windowWidth - WINDOW_EDGE_SIZE, windowY + windowHeight - WINDOW_EDGE_SIZE, WINDOW_LOWER_U, WINDOW_LOWER_V, WINDOW_EDGE_SIZE, WINDOW_EDGE_SIZE);
 
+		GlStateManager.color(1, 1, 1);
 		GlStateManager.bindTexture(instance.glId);
 		drawModalRectWithCustomSizedTexture(dispX, dispY, 0, 0, dispWidth, dispHeight, instance.width, instance.height);
 
 		this.fontRenderer.drawString("MCRDP - " + instance.server, windowX + 8, windowY + 6, 0x404040);
 
-		int x = mouseX - dispX;
-		int y = mouseY - dispY;
-		if (x >= 0 && x < dispWidth && y >= 0 && y < dispHeight) {
+		if (rdpFocused) {
 			instance.input.moveMouse(x, y);
 		}
 
@@ -96,9 +114,11 @@ public class GuiRDPControl extends GuiScreen {
 	@Override
 	protected void keyTyped(char typedChar, int keyCode) throws IOException {
 		super.keyTyped(typedChar, keyCode);
-		if (typedChar != 0) {
-			instance.input.sendUnicode(typedChar, false);
-			instance.input.sendUnicode(typedChar, true);
+		if (rdpFocused) {
+			if (typedChar != 0) {
+				instance.input.sendUnicode(typedChar, false);
+				instance.input.sendUnicode(typedChar, true);
+			}
 		}
 	}
 
@@ -107,9 +127,11 @@ public class GuiRDPControl extends GuiScreen {
 			throws IOException {
 		super.mouseClicked(mouseX, mouseY, mouseButton);
 
+		mouseButtons |= 1 << mouseButton;
+
 		int x = mouseX - dispX;
 		int y = mouseY - dispY;
-		if (x >= 0 && x < dispWidth && y >= 0 && y < dispHeight) {
+		if (rdpFocused) {
 			if (instance.input.canSendButton(mouseButton + 1)) {
 				instance.input.mouseButton(mouseButton + 1, true, x, y);
 			}
@@ -119,23 +141,28 @@ public class GuiRDPControl extends GuiScreen {
 	@Override
 	public void handleMouseInput() throws IOException {
 		super.handleMouseInput();
-		int dwheel = Mouse.getEventDWheel() * 2; // * 2 because it feels "right"
-		if (dwheel != 0) {
-			int sig = (dwheel > 0 ? 1 : -1);
-			while (Math.abs(dwheel) >= 256) {
-				dwheel -= sig * 255;
-				instance.input.scrollVertically(sig * 255);
+		if (rdpFocused) {
+			int dwheel = Mouse.getEventDWheel() * 2; // * 2 because it feels "right"
+			if (dwheel != 0) {
+				int sig = (dwheel > 0 ? 1 : -1);
+				while (Math.abs(dwheel) >= 256) {
+					dwheel -= sig * 255;
+					instance.input.scrollVertically(sig * 255);
+				}
+				instance.input.scrollVertically(dwheel);
 			}
-			instance.input.scrollVertically(dwheel);
 		}
 	}
 
 	@Override
 	protected void mouseReleased(int mouseX, int mouseY, int state) {
 		super.mouseReleased(mouseX, mouseY, state);
-		int x = mouseX - dispX;
-		int y = mouseY - dispY;
-		if (x >= 0 && x < dispWidth && y >= 0 && y < dispHeight) {
+
+		mouseButtons &= ~(1 << state);
+
+		if (rdpFocused) {
+			int x = mouseX - dispX;
+			int y = mouseY - dispY;
 			if (instance.input.canSendButton(state + 1)) {
 				instance.input.mouseButton(state + 1, false, x, y);
 			}

@@ -29,6 +29,7 @@ import net.propero.rdp.Rdp;
 import net.propero.rdp.Version;
 import net.propero.rdp.api.InitState;
 import net.propero.rdp.api.RdesktopCallback;
+import net.propero.rdp.api.SystemCursorType;
 import net.propero.rdp.keymapping.KeyCode_FileBased;
 import net.propero.rdp.rdp5.VChannels;
 
@@ -45,6 +46,9 @@ public class RDPInstance implements RdesktopCallback {
 	 */
 	@Nullable
 	private Cursor cursor = null;
+	/** An invisible cursor.  Null until initialized. */
+	@Nullable
+	private Cursor invisibleCursor = null;
 
 	// XXX this shouldn't need to be exposed
 	public Input input;
@@ -370,8 +374,32 @@ public class RDPInstance implements RdesktopCallback {
 
 	@Override
 	public void setCursor(Object cursor) {
-		assert cursor instanceof Cursor : "Unexpected object " + cursor + " (" + (cursor != null ? cursor.getClass() : null) + ")";
-		this.cursor = (Cursor) cursor;
+		if (cursor instanceof Cursor) {
+			this.cursor = (Cursor) cursor;
+		} else if (cursor instanceof SystemCursorType) {
+			switch ((SystemCursorType)cursor) {
+			case INVISIBLE_CURSOR: {
+				if (invisibleCursor == null) {
+					try {
+						invisibleCursor = new Cursor(1, 1, 0, 0, 1, BufferUtils.createIntBuffer(1), null);
+					} catch (LWJGLException ex) {
+						throw new RuntimeException(ex);
+					}
+				}
+				setCursor(invisibleCursor);
+				break;
+			}
+			case DEFAULT_CURSOR: {
+				this.cursor = null;
+				break;
+			}
+			default: {
+				throw new IllegalArgumentException("Unknown SystemCursorType " + cursor);
+			}
+			}
+		} else {
+			throw new IllegalArgumentException("Unexpected object " + cursor + " (" + (cursor != null ? cursor.getClass() : null) + ")");
+		}
 	}
 
 	public Cursor getCursor() {

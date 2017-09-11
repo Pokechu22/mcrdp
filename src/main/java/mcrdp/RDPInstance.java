@@ -362,7 +362,7 @@ public class RDPInstance implements RdesktopCallback {
 		buffer.flip();
 
 		try {
-			return new Cursor(width, height, hotspotX, hotspotY, 1, buffer, null);
+			return new Cursor(width, height, hotspotX, height - hotspotY - 1, 1, buffer, null);
 		} catch (LWJGLException e) {
 			throw new RuntimeException(e);
 		}

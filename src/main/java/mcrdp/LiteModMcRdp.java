@@ -99,6 +99,27 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		if (!clock) {
 			return;
 		}
+		this.minecraft.mcProfiler.startSection("unloadCheck");
+		if (minecraft.world == null && !infos.isEmpty()) {
+			// Unload world check
+			minecraft.ingameGUI.getChatGUI().printChatMessage(new TextComponentString("Removed all " + this.infos.size() + " infos"));
+			infos.clear();
+			this.minecraft.mcProfiler.endSection(); // unloadCheck
+			return;
+		}
+		this.minecraft.mcProfiler.endStartSection("blockCheck");
+		{
+			// Unloaded info check
+			int oldSize = this.infos.size();
+			boolean removedAny =
+					this.infos.removeIf(info -> minecraft.world.getBlockState(info.pos).getBlock() != Blocks.WALL_SIGN);
+			int newSize = this.infos.size();
+	
+			if (removedAny) {
+				minecraft.ingameGUI.getChatGUI().printChatMessage(new TextComponentString("Removed " + (oldSize - newSize) + " unloaded infos"));
+			}
+		}
+		this.minecraft.mcProfiler.endStartSection("newSigns");
 		newSigns.forEach(this::handleNewTE);
 		newSigns.clear();
 	}
@@ -277,23 +298,7 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 	@Override
 	public void onSetupCameraTransform(float partialTicks, int pass,
 			long timeSlice) {
-		if (minecraft.world == null) {
-			// Unload world check
-			minecraft.ingameGUI.getChatGUI().printChatMessage(new TextComponentString("Removed all " + this.infos.size() + " infos"));
-			return;
-		}
-		{
-			// Unloaded info check
-			int oldSize = this.infos.size();
-			boolean removedAny =
-					this.infos.removeIf(info -> minecraft.world.getBlockState(info.pos).getBlock() != Blocks.WALL_SIGN);
-			int newSize = this.infos.size();
-	
-			if (removedAny) {
-				minecraft.ingameGUI.getChatGUI().printChatMessage(new TextComponentString("Removed " + (oldSize - newSize) + " unloaded infos"));
-			}
-		}
-
+		minecraft.mcProfiler.startSection("mcrdp.display");
 		EntityPlayerSP player = minecraft.player;
 		double x = player.lastTickPosX + (player.posX - player.lastTickPosX) * (double)partialTicks;
 		double y = player.lastTickPosY + (player.posY - player.lastTickPosY) * (double)partialTicks;
@@ -327,6 +332,7 @@ public class LiteModMcRdp implements LiteMod, PlayerClickListener, PacketHandler
 		}
 
 		glPopMatrix();
+		minecraft.mcProfiler.endSection();
 	}
 
 	/**

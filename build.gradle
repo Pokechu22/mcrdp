@@ -47,8 +47,8 @@ dependencies {
 }
 
 minecraft {
-    version = "1.12.1"
-    mappings = "snapshot_20170907"
+    version = "1.12.2"
+    mappings = "snapshot_20170927"
     runDir = "run"
     makeObfSourceJar = false
 }
@@ -60,7 +60,7 @@ litemod {
         name = "mcrdp"
         displayName = "Minecraft RDP"
         author = "pokechu22; properJavaRDP contributors"
-        mcversion = "1.12.1"
+        mcversion = "1.12.2"
         //mixinConfigs += "mixins.mcrdp.json"
         version = project.version
         description = "Extremely useless mod that allows connecting to computers through RDP and displaying/interacting with them in game."

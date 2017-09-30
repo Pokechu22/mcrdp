@@ -1,5 +1,7 @@
 package mcrdp;
 
+import static org.lwjgl.opengl.GL11.*;
+
 import java.io.IOException;
 
 import org.apache.logging.log4j.LogManager;
@@ -28,6 +30,10 @@ public class GuiRDPControl extends GuiScreen {
 	private static final int WINDOW_LOWER_V = WINDOW_TEX_HEIGHT - WINDOW_EDGE_SIZE;
 
 	/**
+	 * Amount of total display size to reserve.
+	 */
+	private static final int WIDTH_RESERVE = 200, HEIGHT_RESERVE = 100;
+	/**
 	 * Minimum resolution guaranteed given to the RDP screen.
 	 */
 	private static final int GUARANTEED_WIDTH = 96, GUARANTEED_HEIGHT = 72;
@@ -36,10 +42,15 @@ public class GuiRDPControl extends GuiScreen {
 	private int dispWidth, dispHeight, dispX, dispY;
 
 	/**
-	 * Width of a single gui pixel on MC (or, the ratio between display width and
+	 * Width of a single gui pixel on MC (effectively, the ratio between display width and
 	 * actual GUI width)
 	 */
 	private int mcScaleFactor;
+	/**
+	 * Width of a single gui pixel on the RDP screen (effectively, the ratio between display
+	 * width (of the area occupied by the RDP screen) and RDP screen width
+	 */
+	private int dispScaleFactor;
 
 	/**
 	 * True if the RDP screen is currently focused.
@@ -71,8 +82,26 @@ public class GuiRDPControl extends GuiScreen {
 
 		mcScaleFactor = new ScaledResolution(this.mc).getScaleFactor();
 
-		dispWidth = Math.max(Math.min(instance.width / mcScaleFactor, this.width - 200), GUARANTEED_WIDTH);
-		dispHeight = Math.max(Math.min(instance.height / mcScaleFactor, this.height - 100), GUARANTEED_HEIGHT);
+		int maxWidth = (this.width - WIDTH_RESERVE);
+		int maxHeight = (this.height - HEIGHT_RESERVE);
+
+		int instanceWidth = instance.width;
+		int instanceHeight = instance.height;
+
+		int dispScale = 1;
+		while (instanceWidth / dispScale >= maxWidth
+				&& instanceHeight / dispScale >= maxHeight) {
+			dispScale++;
+			if (instanceWidth / dispScale < GUARANTEED_WIDTH
+					|| instanceHeight / dispScale < GUARANTEED_HEIGHT) {
+				dispScale--;
+				break;
+			}
+		}
+
+		dispScaleFactor = dispScale;
+		dispWidth = instanceWidth / dispScale;
+		dispHeight = instanceHeight / dispScale;
 		dispX = this.width / 2 - dispWidth / 2;
 		dispY = 38;
 	}
@@ -89,12 +118,12 @@ public class GuiRDPControl extends GuiScreen {
 		GlStateManager.enableBlend();
 
 		mc.getTextureManager().bindTexture(WINDOW);
-		int x = (mouseX - dispX) * mcScaleFactor;
-		int y = (mouseY - dispY) * mcScaleFactor;
+		int x = (mouseX - dispX) * dispScaleFactor;
+		int y = (mouseY - dispY) * dispScaleFactor;
 		if (mouseButtons == 0) {
 			// Only re-evaluate focus when there are no mouse buttons held (to allow
 			// dragging out of bounds) 
-			this.rdpFocused = (x >= 0 && x < dispWidth * mcScaleFactor && y >= 0 && y < dispHeight * mcScaleFactor);
+			this.rdpFocused = (x >= 0 && x < dispWidth * dispScaleFactor && y >= 0 && y < dispHeight * dispScaleFactor);
 		}
 		if (rdpFocused) {
 			GlStateManager.color(.75f, .75f, .75f);
@@ -112,8 +141,8 @@ public class GuiRDPControl extends GuiScreen {
 		GlStateManager.bindTexture(instance.glId);
 
 		GlStateManager.pushMatrix();
-		GlStateManager.scale(1.0/mcScaleFactor, 1.0/mcScaleFactor, 1);
-		drawModalRectWithCustomSizedTexture(dispX * mcScaleFactor, dispY * mcScaleFactor, 0, 0, dispWidth * mcScaleFactor, dispHeight * mcScaleFactor, instance.width, instance.height);
+		GlStateManager.scale(1.0/dispScaleFactor, 1.0/dispScaleFactor, 1);
+		drawModalRectWithCustomSizedTexture(dispX * dispScaleFactor, dispY * dispScaleFactor, 0, 0, dispWidth * dispScaleFactor, dispHeight * dispScaleFactor, instance.width, instance.height);
 		GlStateManager.popMatrix();
 
 		this.fontRenderer.drawString("MCRDP - " + instance.server, windowX + 8, windowY + 6, 0x404040);
@@ -143,8 +172,8 @@ public class GuiRDPControl extends GuiScreen {
 
 		mouseButtons |= 1 << mouseButton;
 
-		int x = (mouseX - dispX) * mcScaleFactor;
-		int y = (mouseY - dispY) * mcScaleFactor;
+		int x = (mouseX - dispX) * dispScaleFactor;
+		int y = (mouseY - dispY) * dispScaleFactor;
 		if (rdpFocused) {
 			if (instance.input.canSendButton(mouseButton + 1)) {
 				instance.input.mouseButton(mouseButton + 1, true, x, y);
@@ -175,8 +204,8 @@ public class GuiRDPControl extends GuiScreen {
 		mouseButtons &= ~(1 << state);
 
 		if (rdpFocused) {
-			int x = (mouseX - dispX) * mcScaleFactor;
-			int y = (mouseY - dispY) * mcScaleFactor;
+			int x = (mouseX - dispX) * dispScaleFactor;
+			int y = (mouseY - dispY) * dispScaleFactor;
 			if (instance.input.canSendButton(state + 1)) {
 				instance.input.mouseButton(state + 1, false, x, y);
 			}

@@ -141,8 +141,17 @@ public class GuiRDPControl extends GuiScreen {
 		GlStateManager.bindTexture(instance.glId);
 
 		GlStateManager.pushMatrix();
+		boolean smooth = dispScaleFactor > mcScaleFactor;
+		if (smooth) {
+			GlStateManager.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			GlStateManager.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		}
 		GlStateManager.scale(1.0/dispScaleFactor, 1.0/dispScaleFactor, 1);
 		drawModalRectWithCustomSizedTexture(dispX * dispScaleFactor, dispY * dispScaleFactor, 0, 0, dispWidth * dispScaleFactor, dispHeight * dispScaleFactor, instance.width, instance.height);
+		if (smooth) {
+			GlStateManager.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			GlStateManager.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		}
 		GlStateManager.popMatrix();
 
 		this.fontRenderer.drawString("MCRDP - " + instance.server, windowX + 8, windowY + 6, 0x404040);

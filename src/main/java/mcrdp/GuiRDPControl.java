@@ -2,20 +2,26 @@ package mcrdp;
 
 import static org.lwjgl.opengl.GL11.*;
 
+import java.awt.Component;
+import java.awt.event.KeyEvent;
 import java.io.IOException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.LWJGLException;
 import org.lwjgl.input.Cursor;
+import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 
+import it.unimi.dsi.fastutil.ints.Int2IntArrayMap;
+import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.util.ResourceLocation;
+import net.propero.rdp.Input;
 
 public class GuiRDPControl extends GuiScreen {
 	private static final ResourceLocation WINDOW = new ResourceLocation("textures/gui/advancements/window.png");
@@ -164,17 +170,6 @@ public class GuiRDPControl extends GuiScreen {
 	}
 
 	@Override
-	protected void keyTyped(char typedChar, int keyCode) throws IOException {
-		super.keyTyped(typedChar, keyCode);
-		if (rdpFocused) {
-			if (typedChar != 0) {
-				instance.input.sendUnicode(typedChar, false);
-				instance.input.sendUnicode(typedChar, true);
-			}
-		}
-	}
-
-	@Override
 	protected void mouseClicked(int mouseX, int mouseY, int mouseButton)
 			throws IOException {
 		super.mouseClicked(mouseX, mouseY, mouseButton);
@@ -187,6 +182,121 @@ public class GuiRDPControl extends GuiScreen {
 			if (instance.input.canSendButton(mouseButton + 1)) {
 				instance.input.mouseButton(mouseButton + 1, true, x, y);
 			}
+		}
+	}
+
+	/**
+	 * Maps LWJGL keycodes to key event VKEY codes.
+	 */
+	private static final Int2IntMap KEYBOARD_TO_VKEY = new Int2IntArrayMap();
+	static {
+		// In order of declaration in Keyboard
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_ESCAPE, KeyEvent.VK_ESCAPE);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_BACK, KeyEvent.VK_BACK_SPACE);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_TAB, KeyEvent.VK_TAB);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_RETURN, KeyEvent.VK_ENTER);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_LCONTROL, KeyEvent.VK_CONTROL);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_LSHIFT, KeyEvent.VK_SHIFT);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_RSHIFT, KeyEvent.VK_SHIFT);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_LMENU, KeyEvent.VK_ALT);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_CAPITAL, KeyEvent.VK_CAPS_LOCK);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F1, KeyEvent.VK_F1);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F2, KeyEvent.VK_F2);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F3, KeyEvent.VK_F3);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F4, KeyEvent.VK_F4);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F5, KeyEvent.VK_F5);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F6, KeyEvent.VK_F6);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F7, KeyEvent.VK_F7);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F8, KeyEvent.VK_F8);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F9, KeyEvent.VK_F9);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F10, KeyEvent.VK_F10);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_NUMLOCK, KeyEvent.VK_NUM_LOCK);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_SCROLL, KeyEvent.VK_SCROLL_LOCK);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F11, KeyEvent.VK_F11);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F12, KeyEvent.VK_F12);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F13, KeyEvent.VK_F13);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F14, KeyEvent.VK_F14);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F15, KeyEvent.VK_F15);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F16, KeyEvent.VK_F16);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F17, KeyEvent.VK_F17);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F18, KeyEvent.VK_F18);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_KANA, KeyEvent.VK_KANA);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_F19, KeyEvent.VK_F19);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_CONVERT, KeyEvent.VK_CONVERT);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_NOCONVERT, KeyEvent.VK_NONCONVERT);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_CIRCUMFLEX, KeyEvent.VK_CIRCUMFLEX);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_NUMPADENTER, KeyEvent.VK_ENTER);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_RCONTROL, KeyEvent.VK_CONTROL);
+		//KEYBOARD_TO_VKEY.put(Keyboard.KEY_SYSRQ, KeyEvent.VK_SYSRQ);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_RMENU, KeyEvent.VK_ALT);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_PAUSE, KeyEvent.VK_PAUSE);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_HOME, KeyEvent.VK_HOME);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_UP, KeyEvent.VK_UP);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_PRIOR, KeyEvent.VK_PAGE_UP);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_LEFT, KeyEvent.VK_LEFT);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_RIGHT, KeyEvent.VK_RIGHT);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_END, KeyEvent.VK_END);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_DOWN, KeyEvent.VK_DOWN);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_NEXT, KeyEvent.VK_PAGE_DOWN);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_INSERT, KeyEvent.VK_INSERT);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_DELETE, KeyEvent.VK_DELETE);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_CLEAR, KeyEvent.VK_CLEAR);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_LMETA, KeyEvent.VK_META);
+		KEYBOARD_TO_VKEY.put(Keyboard.KEY_RMETA, KeyEvent.VK_META);
+	}
+
+	@Override
+	public void handleKeyboardInput() throws IOException {
+		if (this.rdpFocused) {
+			if (Keyboard.isRepeatEvent()) {
+				// Repeat events should be handled on the other machine
+				return;
+			}
+			char typedChar = Keyboard.getEventCharacter();
+
+			if (typedChar >= ' ') {
+				// Send characters with unicode when possible, as it means we don't
+				// have to deal with the VKEY.
+				instance.input.sendUnicode(typedChar, !Keyboard.getEventKeyState());
+			} else {
+				int keyCode = Keyboard.getEventKey();
+				if (keyCode == Keyboard.KEY_NONE) {
+					LOGGER.warn("Unknown key pressed with neither an acceptable keyCode nor char");
+					return;
+				}
+				if (!KEYBOARD_TO_VKEY.containsKey(keyCode)) {
+					LOGGER.warn("Key with keyCode {} does not have a vkey in the map", keyCode);
+					return;
+				}
+
+				int keyEventCode = KEYBOARD_TO_VKEY.get(keyCode);
+
+				// This is a bit of a mess; try to emulate a java event
+				instance.input.modifiersValid = true;
+				long time = Input.getTime();
+
+				boolean press = Keyboard.getEventKeyState();
+				int eventType = press ? KeyEvent.KEY_PRESSED : KeyEvent.KEY_RELEASED;
+				int keyEventModifiers = 0;
+				if (isCtrlKeyDown()) {
+					keyEventModifiers |= KeyEvent.CTRL_DOWN_MASK;
+				}
+				if (isAltKeyDown()) {
+					keyEventModifiers |= KeyEvent.ALT_DOWN_MASK;
+				}
+				if (isShiftKeyDown()) {
+					keyEventModifiers |= KeyEvent.SHIFT_DOWN_MASK;
+				}
+				KeyEvent event = new KeyEvent(DummyComponent.INSTANCE, eventType, time, keyEventModifiers, keyEventCode, KeyEvent.CHAR_UNDEFINED);
+
+				instance.input.lastKeyEvent = event;
+
+				if (!instance.input.handleSpecialKeys(time, event, press)) {
+					instance.input.sendKeyPresses(instance.input.newKeyMapper.getKeyStrokes(event));
+				}
+			}
+		} else {
+			super.handleKeyboardInput();
 		}
 	}
 
@@ -248,5 +358,10 @@ public class GuiRDPControl extends GuiScreen {
 		} catch (LWJGLException e) {
 			LOGGER.warn("Failed to reset cursor", e);
 		}
+	}
+
+	private static class DummyComponent extends Component {
+		private static final long serialVersionUID = 1L;
+		public static final DummyComponent INSTANCE = new DummyComponent();
 	}
 }

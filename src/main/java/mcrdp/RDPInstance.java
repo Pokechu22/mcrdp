@@ -2,6 +2,7 @@ package mcrdp;
 
 import static org.lwjgl.opengl.GL11.*;
 
+import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
@@ -159,7 +160,24 @@ public class RDPInstance implements RdesktopCallback {
 		LOGGER.debug("Registering drawing surface...");
 		RdpLayer.registerDrawingSurface(this);
 		LOGGER.debug("Registering comms layer...");
-		input = new Input(options, RdpLayer, (KeyCode_FileBased) null); // XXX HACK should be sent from RDP to this
+		KeyCode_FileBased keyMap;
+		try {
+			String filename = "keymaps/en-us";
+			try (InputStream istr = Rdesktop.class.getResourceAsStream("/" + filename)) {
+				if (istr == null) {
+					LOGGER.debug("Loading keymap from filename: " + filename);
+					keyMap = new KeyCode_FileBased(options, filename);
+				} else {
+					LOGGER.debug("Loading keymap from InputStream: " + "/" + filename);
+					keyMap = new KeyCode_FileBased(options, istr);
+				}
+			}
+			options.keylayout = keyMap.getMapCode();
+		} catch (Exception kmEx) {
+			LOGGER.warn("Unexpected keymap exception: ", kmEx);
+			throw new RuntimeException(kmEx);
+		}
+		input = new Input(options, RdpLayer, keyMap); // XXX HACK should be sent from RDP to this
 		LOGGER.info("Connecting to " + server + ":" + options.port
 				+ " ...");
 
